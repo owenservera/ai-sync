@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/stores/appStore'
 import { testCapability } from '@/lib/messaging'
-import { Loader2, Play, CheckCircle2, XCircle, Clock, ExternalLink, Search, RefreshCw, Trash2, Edit3, Plus, FileText, Sparkles, Database, WifiOff } from 'lucide-react'
+import { Loader2, Play, CheckCircle2, XCircle, Clock, ExternalLink, Search, RefreshCw, Trash2, Edit3, Plus, FileText, Sparkles, Database, WifiOff, Image, Download } from 'lucide-react'
+import { MediaGallery } from './MediaGallery'
 
 const CAPABILITIES = [
   { id: 'list', type: 'TEST_LIST_CONVERSATIONS', label: 'List Conversations', icon: Database, description: 'Paginated conversation list with cursor navigation' },
@@ -23,6 +24,8 @@ const CAPABILITIES = [
   { id: 'ping', type: 'TEST_PING', label: 'Ping / Connectivity', icon: CheckCircle2, description: 'Check if provider is reachable' },
   { id: 'offline', type: 'TEST_IS_OFFLINE', label: 'Check Offline Status', icon: WifiOff, description: 'Verify if account is still authenticated' },
   { id: 'url', type: 'TEST_GET_CHAT_URL', label: 'Get Chat URL', icon: ExternalLink, description: 'Build Gemini URL for a conversation' },
+  { id: 'downloadRaw', type: 'TEST_DOWNLOAD_RAW', label: 'Download Raw Data', icon: Database, description: 'Download N most recent conversations with raw API response, parsed messages, and media' },
+  { id: 'media', type: 'TEST_DOWNLOAD_MEDIA', label: 'Download Media', icon: Image, description: 'Extract and download all media from a conversation' },
 ]
 
 function ResultDisplay({ result }: { result: any }) {
@@ -35,8 +38,18 @@ function ResultDisplay({ result }: { result: any }) {
   )
 }
 
+function exportJson(data: any, filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${filename}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
-  const { activeProvider } = useAppStore()
+  const { activeProvider, activeAccountId } = useAppStore()
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
@@ -54,14 +67,17 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
     setError(null)
 
     try {
-      const payload: Record<string, unknown> = { providerId: activeProvider, ...formValues }
+      const payload: Record<string, unknown> = { providerId: activeProvider, accountId: activeAccountId || undefined, ...formValues }
 
       if (cap.id === 'list') {
         payload.cursor = formValues.cursor || undefined
         payload.limit = formValues.limit ? parseInt(formValues.limit) : undefined
       }
-      if (cap.id === 'fetch' || cap.id === 'edit' || cap.id === 'delete' || cap.id === 'url') {
+      if (cap.id === 'media' || cap.id === 'downloadRaw') {
         payload.conversationId = formValues.conversationId || ''
+      }
+      if (cap.id === 'downloadRaw') {
+        payload.count = formValues.count ? parseInt(formValues.count) : 1
       }
       if (cap.id === 'edit') {
         payload.title = formValues.title || ''
@@ -167,9 +183,79 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
               <Input placeholder="Account ID" value={formValues.accountId || ''} onChange={(e) => updateField('accountId', e.target.value)} />
             </div>
           )}
+          {cap.id === 'media' && (
+            <div>
+              <Label className="text-xs">Conversation ID</Label>
+              <Input placeholder="c_xxx or xxx" value={formValues.conversationId || ''} onChange={(e) => updateField('conversationId', e.target.value)} />
+            </div>
+          )}
+          {cap.id === 'downloadRaw' && (
+            <div>
+              <Label className="text-xs">Number of conversations (default: 1)</Label>
+              <Input type="number" placeholder="1" value={formValues.count || '1'} onChange={(e) => updateField('count', e.target.value)} />
+            </div>
+          )}
         </div>
 
-        {status === 'success' && <ResultDisplay result={result} />}
+        {status === 'success' && cap.id === 'media' && result?.media && (
+          <MediaGallery media={result.media} />
+        )}
+        {status === 'success' && cap.id === 'downloadRaw' && result?.conversations && (
+          <>
+            <div className="flex flex-wrap gap-2 mt-3 text-xs">
+              <Badge variant="secondary">Downloaded: {result.count}/{result.requested}</Badge>
+              <Badge variant="secondary">Account: {result.accountEmail || result.accountId}</Badge>
+            </div>
+            {result.conversations.map((conv: any, i: number) => (
+              <div key={i} className="mt-3 p-3 rounded-md border">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium truncate">{conv.header?.title || conv.header?.id || 'Error'}</h4>
+                  <div className="flex gap-1">
+                    {conv.rawApiResponse && (
+                      <Button size="sm" variant="outline" onClick={() => exportJson(conv.rawApiResponse, `raw_${conv.header?.id}`)}>
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    )}
+                    {conv.parsedMessages && (
+                      <Button size="sm" variant="outline" onClick={() => exportJson(conv.parsedMessages, `parsed_${conv.header?.id}`)}>
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {conv.error ? (
+                  <p className="text-xs text-destructive">{conv.error}</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span>Messages: {conv.parsedMessages?.length || 0}</span>
+                      <span>Media: {conv.media?.length || 0}</span>
+                      <span>Raw API: {conv.rawApiResponse ? 'yes' : 'no'}</span>
+                    </div>
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Raw API Response</summary>
+                      <pre className="mt-1 p-2 rounded bg-muted/50 overflow-auto max-h-48 text-[10px] whitespace-pre-wrap break-all font-mono">
+                        {JSON.stringify(conv.rawApiResponse, null, 2)}
+                      </pre>
+                    </details>
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Parsed Messages</summary>
+                      <pre className="mt-1 p-2 rounded bg-muted/50 overflow-auto max-h-48 text-[10px] whitespace-pre-wrap break-all font-mono">
+                        {JSON.stringify(conv.parsedMessages, null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" variant="outline" onClick={() => exportJson(result, `download_raw_${Date.now()}`)}>
+                <Download className="w-3 h-3 mr-1" /> Export All
+              </Button>
+            </div>
+          </>
+        )}
+        {status === 'success' && cap.id !== 'downloadRaw' && <ResultDisplay result={result} />}
         {status === 'error' && (
           <div className="mt-3 p-3 rounded-md bg-destructive/10 text-destructive text-xs">
             {error}

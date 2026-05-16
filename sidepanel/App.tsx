@@ -4,12 +4,14 @@ import { ConversationsPanel } from '@/components/ConversationsPanel'
 import { CapabilitiesPanel } from '@/components/CapabilitiesPanel'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { NetworkLogPanel } from '@/components/NetworkLogPanel'
+import { AccountsPanel } from '@/components/AccountsPanel'
 import { useAppStore } from '@/stores/appStore'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { LayoutDashboard, MessageSquare, TestTube2, Settings, Network, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, TestTube2, Settings, Network, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'accounts', label: 'Accounts', icon: Users },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
   { id: 'capabilities', label: 'Test', icon: TestTube2 },
   { id: 'network', label: 'Network', icon: Network },
@@ -69,6 +71,7 @@ export default function App() {
 
         <div className="flex-1 overflow-auto">
           {activeTab === 'overview' && <OverviewPanel />}
+          {activeTab === 'accounts' && <AccountsPanel />}
           {activeTab === 'conversations' && <ConversationsPanel />}
           {activeTab === 'capabilities' && <CapabilitiesPanel />}
           {activeTab === 'network' && <NetworkLogPanel />}

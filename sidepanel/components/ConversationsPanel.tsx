@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { testCapability } from '@/lib/messaging'
-import { MessageSquare, ExternalLink, Search, RefreshCw, Loader2, Clock } from 'lucide-react'
+import { useAppStore } from '@/stores/appStore'
+import { MessageSquare, ExternalLink, Search, RefreshCw, Loader2, Clock, Image } from 'lucide-react'
+import { MediaGallery } from './MediaGallery'
+import { extractMediaFromMessages } from '@/lib/media-extract'
+import type { MediaItem } from '@/lib/media-extract'
 
 interface Header {
   id: string
@@ -20,6 +24,7 @@ interface Header {
 }
 
 export function ConversationsPanel() {
+  const { activeAccountId } = useAppStore()
   const [conversations, setConversations] = useState<Header[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -27,6 +32,8 @@ export function ConversationsPanel() {
   const [viewingConversation, setViewingConversation] = useState<Header | null>(null)
   const [messages, setMessages] = useState<Array<{ role: string; content: string; timestamp: number }>>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
+  const [showMedia, setShowMedia] = useState(false)
 
   useEffect(() => {
     loadConversations()
@@ -35,7 +42,7 @@ export function ConversationsPanel() {
   async function loadConversations() {
     setLoading(true)
     try {
-      const allConversations: Header[] = await testCapability('GET_ALL_HEADERS', { serviceId: selectedProvider })
+      const allConversations: Header[] = await testCapability('GET_ALL_HEADERS', { serviceId: selectedProvider, accountId: activeAccountId || undefined })
       setConversations(allConversations || [])
     } catch (e) {
       console.error('Failed to load conversations:', e)
@@ -47,12 +54,20 @@ export function ConversationsPanel() {
   async function openConversation(conv: Header) {
     setViewingConversation(conv)
     setLoadingMessages(true)
+    setMediaItems([])
+    setShowMedia(false)
     try {
       const result = await testCapability('TEST_FETCH_CONTENT', {
         providerId: selectedProvider,
         conversationId: conv.id,
+        accountId: activeAccountId || undefined,
       })
       setMessages(result?.messages || [])
+
+      // Extract media from messages
+      const msgs = result?.messages || []
+      const extracted = extractMediaFromMessages(msgs)
+      setMediaItems(extracted)
     } catch (e: any) {
       console.error('Failed to fetch conversation:', e)
     } finally {
@@ -95,7 +110,7 @@ export function ConversationsPanel() {
     return (
       <div className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <Button variant="outline" size="sm" onClick={() => { setViewingConversation(null); setMessages([]) }}>
+          <Button variant="outline" size="sm" onClick={() => { setViewingConversation(null); setMessages([]); setMediaItems([]); setShowMedia(false) }}>
             &larr; Back
           </Button>
           <Button variant="outline" size="sm" onClick={() => openInGemini(viewingConversation)}>
@@ -106,6 +121,12 @@ export function ConversationsPanel() {
 
         <h2 className="text-base font-semibold truncate">{viewingConversation.title}</h2>
         <p className="text-xs text-muted-foreground">Updated {formatTime(viewingConversation.updated)}</p>
+        {mediaItems.length > 0 && (
+          <Button variant="outline" size="sm" onClick={() => setShowMedia(!showMedia)}>
+            <Image className="w-4 h-4 mr-1" />
+            {showMedia ? 'Hide' : 'Show'} Media ({mediaItems.length})
+          </Button>
+        )}
         <Separator />
 
         {loadingMessages ? (
@@ -129,6 +150,8 @@ export function ConversationsPanel() {
             ))}
           </div>
         )}
+
+        {showMedia && <MediaGallery media={mediaItems} />}
       </div>
     )
   }
