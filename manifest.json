@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Conversation Archive",
+  "version": "0.1.0",
+  "description": "Download and sync your AI conversations to a local database",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "cookies",
+    "webRequest",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://gemini.google.com/*",
+    "https://chatgpt.com/*",
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "dist/background/service_worker.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Conversation Archive",
+    "default_icon": {
+      "16": "icons/icon16.svg",
+      "48": "icons/icon48.svg",
+      "128": "icons/icon128.svg"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.svg",
+    "48": "icons/icon48.svg",
+    "128": "icons/icon128.svg"
+  }
+}
