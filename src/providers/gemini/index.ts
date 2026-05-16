@@ -57,52 +57,59 @@ export class GeminiProvider implements ConversationProvider {
   // ── Authentication ──
 
   async detectAccounts(): Promise<Account[]> {
-    // First try cached accounts from IndexedDB
-    const accounts = await idb.accounts
-      .filter((a: any) => a.serviceId === SERVICE_ID)
-      .toArray()
-    if (accounts.length > 0) return accounts
+    const maxAccounts = 10
+    const seenEmails = new Set<string>()
+    const found: Account[] = []
 
-    // Fallback: detect from cookies in real-time
-    // This handles the common case where the user is logged into Gemini
-    // but the network interceptor hasn't populated IDB yet
-    try {
-      const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve => {
-        chrome.cookies.get({ url: 'https://gemini.google.com', name: 'SID' }, resolve)
-      })
-      if (!cookie?.value) return []
+    for (let i = 0; i < maxAccounts; i++) {
+      try {
+        const profile = await fetchProfile(i)
+        if (!profile?.at) continue
 
-      const profile = await fetchProfile(0)
-      if (!profile?.at) return []
+        const email = profile.email || ''
+        if (seenEmails.has(email)) continue
+        seenEmails.add(email)
 
-      const account: Account = {
-        id: cookie.value,
-        serviceId: SERVICE_ID,
-        index: 0,
-        token: profile.at,
-        email: profile.email || '',
-        name: profile.name,
-      }
-      await idb.accounts.put(account)
-
-      // Bootstrap org entry
-      const existingOrg = await idb.orgs.get(account.id)
-      if (!existingOrg) {
-        await idb.orgs.put({
-          serviceId: SERVICE_ID,
-          accountId: account.id,
-          email: account.email,
-          name: account.name || account.email,
-          id: account.id,
-          status: OrgStatus.New,
+        const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve => {
+          chrome.cookies.get({ url: 'https://gemini.google.com', name: 'SID' }, resolve)
         })
-      }
+        if (!cookie?.value) continue
 
-      return [account]
-    } catch (error) {
-      logError('gemini:detectAccounts', `Cookie fallback failed | error: ${JSON.stringify(error)}`)
-      return []
+        // Use email-based ID for stability and backward compatibility
+        const accountId = email ? email : `${cookie.value}${i > 0 ? `_${i}` : ''}`
+
+        const existing = await idb.accounts.get(accountId)
+        const account: Account = {
+          id: accountId,
+          serviceId: SERVICE_ID,
+          index: i,
+          token: profile.at,
+          email,
+          name: profile.name,
+        }
+        await idb.accounts.put(account)
+
+        if (!existing) {
+          const existingOrg = await idb.orgs.get(accountId)
+          if (!existingOrg) {
+            await idb.orgs.put({
+              serviceId: SERVICE_ID,
+              accountId: account.id,
+              email: account.email,
+              name: account.name || account.email,
+              id: account.id,
+              status: OrgStatus.New,
+            })
+          }
+        }
+
+        found.push(account)
+      } catch {
+        continue
+      }
     }
+
+    return found
   }
 
   async refreshAuth(account: Account): Promise<AuthProfile | null> {

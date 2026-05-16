@@ -56,8 +56,8 @@ export async function onGoogleAccountFetch(email: string): Promise<void> {
 }
 
 export async function handleNetworkActivity(details: RequestDetails): Promise<SyncTrigger | null> {
-  const { url } = details.request
-  if (!url.includes(GEMINI_DOMAIN)) return null
+  const url = details.url
+  if (!url?.includes(GEMINI_DOMAIN)) return null
 
   const userIndex = parseInt(new URL(url).pathname.match(/\/u\/(\d+)/)?.[1] || '0', 10)
 

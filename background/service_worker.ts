@@ -93,8 +93,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const provider = getProvider(message.providerId)
       if (provider) {
         provider.detectAccounts().then(accounts => {
-          for (const account of accounts) {
-            syncManager.syncProvider(provider, account)
+          const targetAccount = message.accountId
+            ? accounts.find(a => a.id === message.accountId)
+            : accounts[0]
+          if (targetAccount) {
+            syncManager.syncProvider(provider, targetAccount)
           }
         })
       }
@@ -105,9 +108,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const provider = getProvider(message.providerId)
       if (provider) {
         provider.detectAccounts().then(accounts => {
-          const account = accounts[0]
-          if (account) {
-            syncManager.syncConversation(provider, account, message.conversationId)
+          const targetAccount = message.accountId
+            ? accounts.find(a => a.id === message.accountId)
+            : accounts[0]
+          if (targetAccount) {
+            syncManager.syncConversation(provider, targetAccount, message.conversationId)
           }
         })
       }
@@ -140,10 +145,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true })
       return false
     }
+    case 'GET_ACCOUNTS': {
+      const serviceId = message.serviceId || 'gemini'
+      const provider = getProvider(serviceId)
+      if (!provider) { sendResponse([]); return false }
+      provider.detectAccounts().then(async (accounts) => {
+        const result = []
+        for (const acc of accounts) {
+          const convCount = await idb.headers.filter(h => h.accountId === acc.id || h.accountId === '' || !h.accountId).count()
+          const lastHeader = await idb.headers.filter(h => h.accountId === acc.id || h.accountId === '' || !h.accountId).reverse().first()
+          result.push({
+            ...acc,
+            conversationCount: convCount,
+            lastSync: lastHeader?.updated || null,
+          })
+        }
+        sendResponse(result)
+      }).catch(() => sendResponse([]))
+      return true
+    }
+    case 'SET_ACTIVE_ACCOUNT': {
+      LiveStorage.set('settings.accounts.activeId', message.accountId || '').then(() => sendResponse({ ok: true }))
+      return true
+    }
+    case 'GET_ACTIVE_ACCOUNT': {
+      LiveStorage.get({ 'settings.accounts.activeId': '' }).then(sendResponse)
+      return true
+    }
     case 'GET_ALL_HEADERS': {
       const serviceId = message.serviceId || 'gemini'
+      const accountId = message.accountId
       idb.headers
-        .filter((h: any) => h.serviceId === serviceId)
+        .filter((h: any) => {
+          if (h.serviceId !== serviceId) return false
+          if (accountId) return h.accountId === accountId || h.accountId === '' || !h.accountId
+          return true
+        })
         .reverse()
         .toArray()
         .then(sendResponse)
@@ -184,6 +221,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'TEST_PING':
     case 'TEST_IS_OFFLINE':
     case 'TEST_GET_CHAT_URL':
+    case 'TEST_DOWNLOAD_MEDIA':
+    case 'TEST_DOWNLOAD_RAW':
     case 'GET_RATE_LIMIT_STATUS': {
       handleCapabilityTest(message).then(sendResponse).catch(e => sendResponse({ error: e.message }))
       return true
@@ -196,7 +235,12 @@ async function handleCapabilityTest(message: any): Promise<any> {
   if (!provider) throw new Error(`Provider not found: ${message.providerId}`)
 
   const accounts = await provider.detectAccounts()
-  const account = accounts[0]
+  let account: any = accounts[0]
+
+  if (message.accountId) {
+    const found = accounts.find(a => a.id === message.accountId)
+    if (found) account = found
+  }
   if (!account) throw new Error('No authenticated account found')
 
   switch (message.type) {
@@ -239,6 +283,82 @@ async function handleCapabilityTest(message: any): Promise<any> {
       const state = await idb.services.get('gemini')
       return { isRateLimited: state?.isRateLimited || false, serviceId: 'gemini' }
     }
+    case 'TEST_DOWNLOAD_RAW': {
+      const count = message.count || 1
+
+      const allHeaders = await idb.headers
+        .filter((h: any) => h.accountId === account.id || h.accountId === '' || !h.accountId)
+        .toArray()
+      const headers = allHeaders.sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, count)
+
+      if (headers.length === 0) throw new Error('No conversations found for this account')
+
+      const { msgToIdb } = await import('../src/providers/gemini/parser')
+      const { extractMediaFromMessages, extractMediaItemsFromRaw } = await import('../sidepanel/lib/media-extract')
+
+      const results = []
+      for (const header of headers) {
+        try {
+          const { fetchProfile } = await import('../src/providers/gemini/auth')
+          const { batchexecute } = await import('../src/providers/gemini/rpc')
+          const profile = await fetchProfile(account.index)
+          let rawApiResponse = null
+          let parsedMessages = []
+
+          if (profile?.at) {
+            try {
+              rawApiResponse = await batchexecute(account.index, profile.at, 'hNvQHb', [`c_${header.id}`, 100, null, 1, [1]], header.orgId || header.id)
+
+              if (Array.isArray(rawApiResponse) && Array.isArray(rawApiResponse[0])) {
+                parsedMessages = rawApiResponse[0]
+                  .map(msgToIdb)
+                  .filter((m): m is any => m !== null && Array.isArray(m))
+                  .flat()
+                parsedMessages.sort((a: any, b: any) => a.timestamp - b.timestamp)
+              }
+            } catch (e) {
+              rawApiResponse = { error: (e as Error).message }
+            }
+          }
+
+          const media = [...new Set([
+            ...extractMediaFromMessages(parsedMessages),
+            ...extractMediaItemsFromRaw(parsedMessages as any[]),
+          ].map(m => m.url))].map(url => ({ url }))
+
+          results.push({
+            header,
+            parsedMessages,
+            rawApiResponse,
+            media,
+          })
+        } catch (e) {
+          results.push({ header, error: (e as Error).message })
+        }
+      }
+
+      return { count: results.length, requested: count, accountId: account.id, accountEmail: account.email, conversations: results }
+    }
+    case 'TEST_DOWNLOAD_MEDIA': {
+      const conversation = await provider.getConversation(account, message.conversationId)
+      if (!conversation) throw new Error('Conversation not found')
+
+      const { extractMediaFromMessages, extractMediaItemsFromRaw } = await import('../sidepanel/lib/media-extract')
+
+      const messages = conversation.messages || []
+      const mediaFromMessages = extractMediaFromMessages(messages)
+      const mediaFromRaw = extractMediaItemsFromRaw(messages as any[])
+
+      const allMedia = [...mediaFromMessages, ...mediaFromRaw]
+      const seen = new Set<string>()
+      const uniqueMedia = allMedia.filter(m => {
+        if (seen.has(m.url)) return false
+        seen.add(m.url)
+        return true
+      })
+
+      return { conversationId: conversation.id, media: uniqueMedia }
+    }
     default:
       throw new Error(`Unknown capability test: ${message.type}`)
   }
@@ -260,6 +380,8 @@ async function getProviderState(): Promise<any> {
       name: provider.name,
       connected,
       conversationCount,
+      accountCount: accounts.length,
+      accounts: accounts.map(a => ({ id: a.id, email: a.email || '', name: a.name || '' })),
       lastSync: null,
       isSyncing: false,
       isRateLimited: false,
