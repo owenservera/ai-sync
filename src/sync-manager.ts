@@ -1,5 +1,6 @@
 import { type ConversationProvider } from './providers/provider-interface'
 import { getProvider, getAllProviders } from './providers/provider-registry'
+import { registry } from './capabilities/registry'
 import { idb } from './idb'
 import { log, logError, logInfo } from './log'
 import { type Org, type Header, type Account, OrgStatus } from './types'
@@ -21,7 +22,7 @@ export class SyncManager {
   async syncAll(): Promise<void> {
     const providers = getAllProviders()
     for (const provider of providers) {
-      if (!provider.hasCapability('conversation-list')) continue
+      if (!registry.hasCapability(provider.id, 'conversation-list')) continue
       const accounts = await provider.detectAccounts()
       for (const account of accounts) {
         await this.syncProvider(provider, account)

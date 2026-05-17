@@ -143,7 +143,7 @@ export class GeminiProvider implements ConversationProvider {
   async getConversation(account: Account, conversationId: string): Promise<Conversation | null> {
     const header = await idb.headers.get(conversationId)
     const conversation = header ? { ...header, accountId: account.id, orgId: account.id } : { id: conversationId, accountId: account.id, orgId: account.id }
-    return fetchContentInternal(account, conversation)
+    return fetchContentInternal(conversation, account)
   }
 
   async search(account: Account, query: string): Promise<SearchResult[]> {
@@ -196,6 +196,13 @@ export class GeminiProvider implements ConversationProvider {
   hasCapability(type: string): boolean {
     return this.config.capabilities.some(c => c.type === type)
   }
+
+  readonly supportedCapabilities: string[] = [
+    'conversation-list', 'message-fetch', 'search', 'create-conversation',
+    'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
+    'fetch-all-gems', 'fetch-summary', 'auto-sync', 'is-offline',
+    'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
+  ]
 }
 
 // ============================================================================

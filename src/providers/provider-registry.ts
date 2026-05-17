@@ -13,7 +13,3 @@ export function getProvider(id: string): ConversationProvider | undefined {
 export function getAllProviders(): ConversationProvider[] {
   return Array.from(providers.values())
 }
-
-export function getProvidersWithCapability(capability: string): ConversationProvider[] {
-  return getAllProviders().filter(p => p.hasCapability(capability))
-}
