@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Conversation Archive",
-  "version": "0.1.0",
+  "version": "0.0.4",
   "description": "Download and sync your AI conversations to a local database",
   "permissions": [
     "storage",

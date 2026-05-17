@@ -8,6 +8,26 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const isWatch = process.argv.includes('--watch')
 
+// ---- Auto version bump ----
+function bumpVersion() {
+  const pkgPath = join(__dirname, 'package.json')
+  const manifestPath = join(__dirname, 'manifest.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+
+  const [major, minor, patch] = (pkg.version || '0.0.0').split('.').map(Number)
+  const newVersion = `${major}.${minor}.${patch + 1}`
+
+  pkg.version = newVersion
+  manifest.version = newVersion
+
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+
+  console.log(`[build] version bumped to ${newVersion}`)
+  return newVersion
+}
+
 /** Generate a simple PNG icon programmatically */
 function generateIcons() {
   const iconsDir = join(__dirname, 'icons')
@@ -26,7 +46,7 @@ function generateIcons() {
 
 generateIcons()
 
-function copyStaticAssets() {
+function copyStaticAssets(version) {
   const distDir = join(__dirname, 'dist')
   if (!existsSync(distDir)) mkdirSync(distDir, { recursive: true })
 
@@ -35,7 +55,7 @@ function copyStaticAssets() {
   manifest.background.service_worker = 'background/service_worker.js'
   manifest.side_panel.default_path = 'sidepanel/sidepanel.html'
   manifest.action.default_popup = 'sidepanel/sidepanel.html'
-  manifest.version = '0.2.0'
+  manifest.version = version
   writeFileSync(join(distDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
   const iconsDir = join(distDir, 'icons')
@@ -91,7 +111,8 @@ const buildOptions = {
 }
 
 async function main() {
-  copyStaticAssets()
+  const version = bumpVersion()
+  copyStaticAssets(version)
   if (isWatch) {
     buildSidepanelCSS()
     const ctx = await esbuild.context(buildOptions)
