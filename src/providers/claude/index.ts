@@ -59,5 +59,6 @@ export class ClaudeProvider implements ConversationProvider {
     'conversation-list', 'message-fetch', 'search', 'create-conversation',
     'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
     'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
+    'get-cached-accounts', 'ensure-authenticated',
   ]
 }

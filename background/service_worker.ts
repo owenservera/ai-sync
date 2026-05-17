@@ -56,7 +56,8 @@ chrome.webRequest.onBeforeRequest.addListener(
     if (url.includes('gemini.google.com')) {
       const trigger = await gemini.handleNetworkActivity(requestDetails)
       if (trigger) {
-        const accounts = await gemini.detectAccounts()
+        // FIX: Use cached accounts from IDB instead of expensive re-scan on every trigger
+        const accounts = await idb.accounts.filter((a: any) => a.serviceId === 'gemini' && a.token).toArray()
         for (const account of accounts) {
           syncManager.syncProvider(gemini, account)
         }

@@ -23,7 +23,8 @@ export class SyncManager {
     const providers = getAllProviders()
     for (const provider of providers) {
       if (!registry.hasCapability(provider.id, 'conversation-list')) continue
-      const accounts = await provider.detectAccounts()
+      // FIX: Use cached accounts from IDB instead of expensive detectAccounts() re-scan
+      const accounts = await idb.accounts.filter((a: any) => a.serviceId === provider.id && a.token).toArray()
       for (const account of accounts) {
         await this.syncProvider(provider, account)
       }
