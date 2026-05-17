@@ -4,6 +4,7 @@
 import type { CapabilityHandler } from './types'
 import { registry } from './registry'
 import { getProvider } from '../providers/provider-registry'
+import { idb } from '../idb'
 
 export interface ExecuteParams {
   providerId: string
@@ -14,6 +15,28 @@ export interface ExecuteParams {
 
 class ApiEngine {
   constructor(private reg: typeof registry) {}
+
+  /** Resolve account with cache-first strategy: IDB → detectAccounts fallback */
+  private async resolveAccount(providerId: string, accountId?: string): Promise<any> {
+    const provider = getProvider(providerId)
+    if (!provider) throw new Error(`Provider not found: ${providerId}`)
+
+    // Step 1: Try cached accounts from IDB
+    const cached = await idb.accounts
+      .filter((a: any) => a.serviceId === providerId && a.token)
+      .toArray()
+    if (cached.length > 0) {
+      return accountId
+        ? cached.find((a: any) => a.id === accountId)
+        : cached[0]
+    }
+
+    // Step 2: Fallback to provider.detectAccounts() (network call)
+    const accounts = await provider.detectAccounts()
+    return accountId
+      ? accounts.find((a: any) => a.id === accountId)
+      : accounts[0]
+  }
 
   async execute(params: ExecuteParams): Promise<unknown> {
     const { providerId, capabilityId, accountId, ...capabilityParams } = params
@@ -35,15 +58,10 @@ class ApiEngine {
       throw new Error(`Invalid params for ${capabilityId}: ${validation.errors.join(', ')}`)
     }
 
-    // 4. Resolve account if required
+    // 4. Resolve account if required (cache-first abstraction)
     let account: any
     if (def.requiresAccount) {
-      const provider = getProvider(providerId)
-      if (!provider) throw new Error(`Provider not found: ${providerId}`)
-      const accounts = await provider.detectAccounts()
-      account = accountId
-        ? accounts.find((a: any) => a.id === accountId)
-        : accounts[0]
+      account = await this.resolveAccount(providerId, accountId)
       if (!account) throw new Error('No authenticated account found')
     }
 

@@ -23,6 +23,7 @@ for (const capId of [
   'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
   'fetch-all-gems', 'fetch-summary', 'auto-sync', 'is-offline',
   'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
+  'get-cached-accounts', 'ensure-authenticated',
 ]) {
   registry.declareProviderCapability('gemini', capId)
 }
@@ -32,6 +33,7 @@ for (const capId of [
   'conversation-list', 'message-fetch', 'search', 'create-conversation',
   'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
   'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
+  'get-cached-accounts', 'ensure-authenticated',
 ]) {
   registry.declareProviderCapability('openai', capId)
 }
@@ -41,6 +43,7 @@ for (const capId of [
   'conversation-list', 'message-fetch', 'search', 'create-conversation',
   'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
   'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
+  'get-cached-accounts', 'ensure-authenticated',
 ]) {
   registry.declareProviderCapability('claude', capId)
 }
@@ -305,14 +308,90 @@ registry.registerHandler('get-rate-limit-status', async () => {
   return { isRateLimited: state?.isRateLimited || false, serviceId: 'gemini' }
 })
 
+registry.registerHandler('get-cached-accounts', async (ctx) => {
+  const serviceId = (ctx.params.serviceId as string) || ctx.providerId
+  const accounts = await idb.accounts.filter((a: any) => a.serviceId === serviceId).toArray()
+  const enriched = await Promise.all(accounts.map(async (acc: any) => ({
+    ...acc,
+    conversationCount: await idb.headers.filter((h: any) => h.accountId === acc.id).count(),
+  })))
+  return enriched
+})
+
+// Shared utility: check if any cookie exists across domains
+async function checkAnyCookie(domains: string[], cookieNames: string[]): Promise<boolean> {
+  for (const domain of domains) {
+    for (const name of cookieNames) {
+      const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve =>
+        chrome.cookies.get({ url: domain, name }, resolve)
+      )
+      if (cookie?.value) return true
+    }
+  }
+  return false
+}
+
+// Provider-specific auth cookie names (include Google multi-account variants)
+const PROVIDER_COOKIE_MAP: Record<string, string[]> = {
+  gemini: ['SID', '__Secure-1PSID', '__Secure-3PSID'],
+  openai: ['__Secure-next-auth.session-token', 'access_token'],
+  claude: ['sessionKey', 'anthropic-api-key'],
+}
+
+registry.registerHandler('ensure-authenticated', async (ctx) => {
+  const provider = getProvider(ctx.providerId)
+  if (!provider) throw new Error(`Provider not found: ${ctx.providerId}`)
+
+  // Step 1: Return cached accounts if available
+  const cached = await idb.accounts.filter((a: any) => a.serviceId === provider.id).toArray()
+  if (cached.length > 0) return cached
+
+  // Step 2: Gate on browser cookies before any network call (provider-aware)
+  const cookieDomains = provider.config.origins?.map(o => o.replace('/*', '')) ?? []
+  const cookieNames = PROVIDER_COOKIE_MAP[provider.id] || ['SID']
+  const hasCookie = await checkAnyCookie(cookieDomains, cookieNames)
+  if (!hasCookie) return []
+
+  // Step 3: Only now call provider.detectAccounts()
+  const accounts = await provider.detectAccounts()
+
+  // Step 4: Persist any new accounts and enrich with metadata
+  const enriched: any[] = []
+  for (const acc of accounts) {
+    await idb.accounts.put(acc)
+    const existingOrg = await idb.orgs.get(acc.id)
+    if (!existingOrg) {
+      await idb.orgs.put({
+        serviceId: acc.serviceId,
+        accountId: acc.id,
+        email: acc.email || '',
+        name: acc.name || acc.email || '',
+        id: acc.id,
+        status: 0, // OrgStatus.New
+      })
+    }
+    const conversationCount = await idb.headers.filter((h: any) => h.accountId === acc.id).count()
+    enriched.push({
+      ...acc,
+      conversationCount,
+      lastSync: null,
+    })
+  }
+
+  return enriched
+})
+
 registry.registerHandler('detect-accounts', async (ctx) => {
   const provider = getProvider(ctx.providerId)
   if (!provider) throw new Error(`Provider not found: ${ctx.providerId}`)
+
   try {
+    // Use ensure-authenticated for cache-first, cookie-gated resolution
     const accounts = await Promise.race([
-      provider.detectAccounts(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('detectAccounts timeout')), 10000)),
-    ])
+      engine.execute({ providerId: ctx.providerId, capabilityId: 'ensure-authenticated' }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('detectAccounts timeout')), 30000)),
+    ]) as any[]
+
     const enriched = await Promise.all(accounts.map(async (acc: any) => {
       const count = await idb.headers.filter((h: any) => h.accountId === acc.id).count()
       return {
@@ -327,9 +406,7 @@ registry.registerHandler('detect-accounts', async (ctx) => {
     }))
     return enriched
   } catch (e: any) {
-    if (e.message === 'detectAccounts timeout') {
-      return []
-    }
+    if (e.message === 'detectAccounts timeout') return []
     throw e
   }
 })
@@ -345,7 +422,7 @@ async function getProviderState(): Promise<any> {
   const providers = getAllProviders()
   const state: any[] = []
   for (const provider of providers) {
-    const accounts = await provider.detectAccounts()
+    const accounts = await idb.accounts.filter((a: any) => a.serviceId === provider.id).toArray()
     const connected = accounts.length > 0
     const conversationCount = connected
       ? await idb.headers.filter((h: any) => h.serviceId === provider.id).count()
@@ -372,7 +449,8 @@ registry.registerHandler('get-state', async () => {
 registry.registerHandler('sync-provider', async (ctx) => {
   const provider = getProvider(ctx.providerId)
   if (provider) {
-    const accounts = await provider.detectAccounts()
+    // FIX: Use engine's cache-first account resolution instead of direct detectAccounts()
+    const accounts = await engine.execute({ providerId: ctx.providerId, capabilityId: 'ensure-authenticated' }) as any[]
     const targetAccount = ctx.accountId
       ? accounts.find((a: any) => a.id === ctx.accountId)
       : accounts[0]
@@ -386,7 +464,8 @@ registry.registerHandler('sync-provider', async (ctx) => {
 registry.registerHandler('sync-conversation', async (ctx) => {
   const provider = getProvider(ctx.providerId)
   if (provider) {
-    const accounts = await provider.detectAccounts()
+    // FIX: Use engine's cache-first account resolution instead of direct detectAccounts()
+    const accounts = await engine.execute({ providerId: ctx.providerId, capabilityId: 'ensure-authenticated' }) as any[]
     const targetAccount = ctx.accountId
       ? accounts.find((a: any) => a.id === ctx.accountId)
       : accounts[0]
