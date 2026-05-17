@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/stores/appStore'
-import { testCapability } from '@/lib/messaging'
+import { executeCapability } from '@/lib/messaging'
+import { registry } from '@src/capabilities/registry'
 import { Wifi, WifiOff, RefreshCw, MessageSquare, AlertTriangle } from 'lucide-react'
+import { AccountSelector } from './AccountSelector'
 
 interface ProviderCard {
   id: string
@@ -29,23 +31,30 @@ export function OverviewPanel() {
   async function loadState() {
     setLoading(true)
     try {
-      const state: ProviderCard[] = await testCapability('GET_STATE')
-      setProviders(state)
+      const state = await executeCapability<ProviderCard[]>('gemini', 'get-state')
+      console.log('GET_STATE response:', state)
+      if (Array.isArray(state)) {
+        setProviders(state)
+      } else {
+        console.error('GET_STATE returned non-array:', state)
+        setProviders([])
+      }
     } catch (e) {
       console.error('Failed to load state:', e)
+      setProviders([])
     } finally {
       setLoading(false)
     }
   }
 
   async function syncProvider(providerId: string) {
-    await testCapability('SYNC_PROVIDER', { providerId })
+    await executeCapability(providerId, 'sync-provider')
     setTimeout(loadState, 2000)
   }
 
   async function pingProvider(providerId: string) {
     try {
-      const result = await testCapability('TEST_PING', { providerId })
+      const result = await executeCapability(providerId, 'ping')
       alert(`Ping ${providerId}: ${result ? 'Connected' : 'Not reachable'}`)
     } catch (e: any) {
       alert(`Ping failed: ${e.message}`)
@@ -53,7 +62,9 @@ export function OverviewPanel() {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="flex flex-col h-full">
+      <AccountSelector />
+      <div className="p-4 space-y-4 flex-1 overflow-auto">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Providers</h2>
         <Button variant="outline" size="sm" onClick={loadState} disabled={loading}>
@@ -100,18 +111,21 @@ export function OverviewPanel() {
                 </div>
               </div>
 
-              {p.capabilities && p.capabilities.length > 0 && (
-                <>
-                  <Separator className="my-3" />
-                  <div className="flex flex-wrap gap-1.5">
-                    {p.capabilities.map((cap) => (
-                      <Badge key={cap.type} variant="secondary" className="text-xs">
-                        {cap.label}
-                      </Badge>
-                    ))}
-                  </div>
-                </>
-              )}
+              {(() => {
+                const supportedCaps = registry.getForProvider(p.id)
+                return supportedCaps.length > 0 && (
+                  <>
+                    <Separator className="my-3" />
+                    <div className="flex flex-wrap gap-1.5">
+                      {supportedCaps.map((cap) => (
+                        <Badge key={cap.id} variant="secondary" className="text-xs">
+                          {cap.label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </>
+                )
+              })()}
             </CardContent>
           </Card>
         ))}
@@ -123,6 +137,7 @@ export function OverviewPanel() {
           <p>No providers detected. Sign in to a supported service.</p>
         </div>
       )}
+      </div>
     </div>
   )
 }

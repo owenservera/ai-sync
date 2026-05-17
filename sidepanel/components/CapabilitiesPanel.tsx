@@ -7,26 +7,29 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/stores/appStore'
-import { testCapability } from '@/lib/messaging'
-import { Loader2, Play, CheckCircle2, XCircle, Clock, ExternalLink, Search, RefreshCw, Trash2, Edit3, Plus, FileText, Sparkles, Database, WifiOff, Image, Download } from 'lucide-react'
+import { executeCapability } from '@/lib/messaging'
+import { registry } from '@src/capabilities/registry'
+import type { CapabilityDefinition } from '@src/capabilities/types'
+import { Loader2, Play, CheckCircle2, XCircle, Clock, ExternalLink, Search, RefreshCw, Trash2, Edit3, Plus, FileText, Sparkles, Database, WifiOff, Image, Download, Send, Eye, Navigation, FileInput, FileOutput, Palette, Activity, UserCheck, User, Settings, TestTube, List, Cpu, Layout, Repeat, Network, AlertTriangle } from 'lucide-react'
 import { MediaGallery } from './MediaGallery'
+import { AccountSelector } from './AccountSelector'
 
-const CAPABILITIES = [
-  { id: 'list', type: 'TEST_LIST_CONVERSATIONS', label: 'List Conversations', icon: Database, description: 'Paginated conversation list with cursor navigation' },
-  { id: 'fetch', type: 'TEST_FETCH_CONTENT', label: 'Fetch Conversation', icon: FileText, description: 'Download full conversation with message pairs' },
-  { id: 'edit', type: 'TEST_EDIT_TITLE', label: 'Edit Title', icon: Edit3, description: 'Rename a conversation' },
-  { id: 'delete', type: 'TEST_DELETE_CONVERSATION', label: 'Delete Conversation', icon: Trash2, description: 'Remove a conversation from Gemini' },
-  { id: 'create', type: 'TEST_CREATE_CONVERSATION', label: 'Create Conversation', icon: Plus, description: 'Start new chat with initial prompt' },
-  { id: 'summary', type: 'TEST_FETCH_SUMMARY', label: 'Fetch Summary', icon: Sparkles, description: 'Get AI-generated text response (temp chat)' },
-  { id: 'gems', type: 'TEST_FETCH_ALL_GEMS', label: 'Fetch All Gems', icon: Database, description: 'List conversations from custom Gemini assistants' },
-  { id: 'search', type: 'TEST_SEARCH', label: 'Search Conversations', icon: Search, description: 'Text search across all conversations' },
-  { id: 'sync', type: 'TEST_SYNC_MISSING', label: 'Sync Missing from Search', icon: RefreshCw, description: 'Download conversations not in local DB' },
-  { id: 'ping', type: 'TEST_PING', label: 'Ping / Connectivity', icon: CheckCircle2, description: 'Check if provider is reachable' },
-  { id: 'offline', type: 'TEST_IS_OFFLINE', label: 'Check Offline Status', icon: WifiOff, description: 'Verify if account is still authenticated' },
-  { id: 'url', type: 'TEST_GET_CHAT_URL', label: 'Get Chat URL', icon: ExternalLink, description: 'Build Gemini URL for a conversation' },
-  { id: 'downloadRaw', type: 'TEST_DOWNLOAD_RAW', label: 'Download Raw Data', icon: Database, description: 'Download N most recent conversations with raw API response, parsed messages, and media' },
-  { id: 'media', type: 'TEST_DOWNLOAD_MEDIA', label: 'Download Media', icon: Image, description: 'Extract and download all media from a conversation' },
-]
+import { deobfuscateRawResponse } from '@/lib/raw-api-taxonomy'
+import { runProtocolTests, type TestSuiteResult } from '@/lib/protocol-test-suite'
+
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Database, FileText, Edit3, Trash2, Plus, Search, CheckCircle2, ExternalLink,
+  Sparkles, RefreshCw, WifiOff, Image, Download, Send, Eye, Navigation,
+  FileInput, FileOutput, Palette, Activity, UserCheck, User, Settings,
+  TestTube, List, Cpu, Layout, Repeat, Network, AlertTriangle,
+}
+
+const CAPABILITY_CARDS = registry.getAll()
+  .filter(cap => cap.category !== 'bridge')
+  .map(cap => ({
+    ...cap,
+    Icon: iconMap[cap.icon || 'Database'] || Database,
+  }))
 
 function ResultDisplay({ result }: { result: any }) {
   if (!result) return null
@@ -48,14 +51,249 @@ function exportJson(data: any, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
+async function downloadMediaFile(url: string, filename: string) {
+  try {
+    const results = await chrome.runtime.sendMessage({ type: 'FETCH_MEDIA_AS_BASE64', urls: [url] })
+    const result = results?.[0]
+    if (result?.error || !result?.dataUrl) {
+      window.open(url, '_blank')
+      return
+    }
+    const a = document.createElement('a')
+    a.href = result.dataUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } catch {
+    window.open(url, '_blank')
+  }
+}
+
+async function downloadMediaFilesBatch(urls: string[], getFilename: (url: string, idx: number) => string) {
+  const batchSize = 5
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const batch = urls.slice(i, i + batchSize)
+    try {
+      const results = await chrome.runtime.sendMessage({ type: 'FETCH_MEDIA_AS_BASE64', urls: batch })
+      for (let j = 0; j < results?.length; j++) {
+        const result = results[j]
+        if (result?.dataUrl) {
+          const a = document.createElement('a')
+          a.href = result.dataUrl
+          a.download = getFilename(batch[j], i + j)
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+        }
+      }
+    } catch {
+      for (let j = 0; j < batch.length; j++) {
+        window.open(batch[j], '_blank')
+      }
+    }
+    if (i + batchSize < urls.length) {
+      await new Promise(r => setTimeout(r, 500))
+    }
+  }
+}
+
+function nameRawMessage(msg: any): any {
+  if (!Array.isArray(msg) || msg.length < 5) return { raw: msg }
+  const [idPair, parentInfo, content, response, timestamp] = msg
+
+  const userContent = content?.[0]?.[0] ?? null
+
+  const primaryBlock = response?.[0] ?? []
+  const respData = primaryBlock?.[0] ?? null
+  const responseId = respData?.[0] ?? null
+  const responseText = respData?.[1]?.[0] ?? null
+  const responseParts = respData?.[1]?.slice(1) ?? []
+  const promptPreview = respData?.[2] ?? null
+  const promptFull = respData?.[3] ?? null
+
+  const toolCalls = primaryBlock?.[1] ?? []
+  const namedToolCalls = toolCalls.map((tc: any) => ({
+    toolId: tc?.[0] ?? null,
+    toolName: tc?.[1]?.[0] ?? null,
+    toolStatus: tc?.[1]?.[1] ?? null,
+    statusMessage: tc?.[1]?.[2] ?? null,
+    statusDetail: tc?.[1]?.[3] ?? null,
+    toolState: tc?.[2] ?? null,
+    toolResult: tc?.[3] ?? null,
+  }))
+
+  const toolStates = response?.[1] ?? []
+  const toolResults = response?.[2] ?? null
+
+  const locale = primaryBlock?.[5] ?? response?.[8] ?? null
+  const isComplete = primaryBlock?.[6] ?? response?.[9] ?? null
+  const isStreaming = primaryBlock?.[7] ?? response?.[10] ?? null
+  const usageStats = primaryBlock?.[12] ?? null
+  const conversationHash1 = primaryBlock?.[13] ?? response?.[14] ?? null
+  const conversationHash2 = primaryBlock?.[15] ?? response?.[17] ?? null
+  const modelName = primaryBlock?.[19] ?? response?.[21] ?? null
+  const modelVersion = primaryBlock?.[22] ?? response?.[24] ?? null
+
+  return {
+    messageId: idPair?.[1] ?? null,
+    conversationId: idPair?.[0] ?? null,
+    parentId: parentInfo?.[1] ?? null,
+    timestamp: timestamp?.[0] ?? null,
+    timestampNanos: timestamp?.[1] ?? null,
+    user: {
+      content: userContent,
+    },
+    assistant: {
+      responseId,
+      text: responseText,
+      parts: responseParts,
+      promptPreview,
+      promptFull,
+    },
+    tools: {
+      calls: namedToolCalls,
+      states: toolStates,
+      results: toolResults,
+    },
+    metadata: {
+      locale,
+      isComplete,
+      isStreaming,
+      usageStats,
+      conversationHash1,
+      conversationHash2,
+      modelName,
+      modelVersion,
+      raw: response?.slice(25) ?? [],
+    },
+  }
+}
+
+function nameImageMetadata(img: any): any {
+  if (!img || !Array.isArray(img)) return { raw: img }
+  return {
+    unknown1: img[0] ?? null,
+    index: img[1] ?? null,
+    filename: img[2] ?? null,
+    thumbnailUrl: img[3] ?? null,
+    unknown2: img[4] ?? null,
+    base64Data: img[5] ? '(base64 data present)' : null,
+    unknown3: img[6] ?? null,
+    unknown4: img[7] ?? null,
+    unknown5: img[8] ?? null,
+    createdTimestamp: img[9]?.[0] ?? null,
+    createdTimestampNanos: img[9]?.[1] ?? null,
+    unknown6: img[10] ?? null,
+    mimeType: img[11] ?? null,
+    unknown7: img[12] ?? null,
+    unknown8: img[13] ?? null,
+    unknown9: img[14] ?? null,
+    dimensions: {
+      width: img[15]?.[0] ?? null,
+      height: img[15]?.[1] ?? null,
+      fileSize: img[15]?.[2] ?? null,
+    },
+  }
+}
+
+function nameVideoMetadata(video: any): any {
+  if (!video || !Array.isArray(video)) return { raw: video }
+  return {
+    unknown1: video[0] ?? null,
+    index: video[1] ?? null,
+    filename: video[2] ?? null,
+    thumbnailUrl: video[3] ?? null,
+    unknown2: video[4] ?? null,
+    base64Data: video[5] ? '(base64 data present)' : null,
+    unknown3: video[6] ?? null,
+    downloadUrls: video[7] ?? null,
+    unknown4: video[8] ?? null,
+    createdTimestamp: video[9]?.[0] ?? null,
+    createdTimestampNanos: video[9]?.[1] ?? null,
+    unknown5: video[10] ?? null,
+    mimeType: video[11] ?? null,
+    unknown6: video[12] ?? null,
+    unknown7: video[13] ?? null,
+    unknown8: video[14] ?? null,
+    unknown9: video[15] ?? null,
+    videoInfo: {
+      duration: video[16]?.[0] ?? null,
+      durationNanos: video[16]?.[1] ?? null,
+      width: video[16]?.[1] ?? null,
+      height: video[16]?.[2] ?? null,
+    },
+  }
+}
+
+function nameSafetyClassifier(classifier: any): any {
+  if (!classifier || !Array.isArray(classifier)) return { raw: classifier }
+  return {
+    classifierName: classifier[0] ?? null,
+    results: (classifier[1] ?? []).map((r: any) => ({
+      label: r?.[0] ?? null,
+      unknown: r?.[1] ?? null,
+      score: r?.[2] ?? null,
+    })),
+    resultType: classifier[2] ?? null,
+    numericId: classifier[3] ?? null,
+  }
+}
+
+function nameResponseConfig(config: any): any {
+  if (!config || !Array.isArray(config)) return { raw: config }
+  return {
+    imageMetadata: config[0] ? nameImageMetadata(config[0]) : null,
+    videoMetadata: config[0] ? nameVideoMetadata(config[0]) : null,
+    promptUrl: config[1]?.[0] ?? null,
+    unknown1: config[1]?.[1] ?? null,
+    promptText: config[1]?.[2] ?? null,
+    unknown2: config[2] ?? null,
+    settings: {
+      model: config[3]?.[0] ?? null,
+      promptText: config[3]?.[1] ?? null,
+      unknown3: config[3]?.slice(2, 15) ?? null,
+      safetyFilter: config[3]?.[15] ?? null,
+      unknown4: config[3]?.[16] ?? null,
+      complaintFlow: config[3]?.[17] ?? null,
+    },
+  }
+}
+
+function nameRawApiResponse(raw: any): any {
+  if (!raw || typeof raw !== 'object') return { raw }
+  if (raw.error) return raw
+
+  const messages = Array.isArray(raw?.[0]) ? raw[0].map(nameRawMessage) : []
+  const cursor = raw?.[1] ?? null
+  const responseMeta = raw?.[2] ?? null
+
+  let namedResponseMeta = null
+  if (responseMeta && Array.isArray(responseMeta)) {
+    const configs = responseMeta[0]?.[0]?.[0]?.[0] ?? []
+    namedResponseMeta = {
+      configs: configs.map(nameResponseConfig),
+      raw: responseMeta,
+    }
+  }
+
+  return {
+    messages,
+    pagination: {
+      nextCursor: cursor,
+    },
+    responseMetadata: namedResponseMeta,
+  }
+}
+
+function CapabilityCard({ cap }: { cap: typeof CAPABILITY_CARDS[0] }) {
   const { activeProvider, activeAccountId } = useAppStore()
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
 
-  const Icon = cap.icon
+  const Icon = cap.Icon
 
   function updateField(field: string, value: string) {
     setFormValues((prev) => ({ ...prev, [field]: value }))
@@ -67,38 +305,28 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
     setError(null)
 
     try {
-      const payload: Record<string, unknown> = { providerId: activeProvider, accountId: activeAccountId || undefined, ...formValues }
+      const payload: Record<string, unknown> = { ...formValues }
 
-      if (cap.id === 'list') {
-        payload.cursor = formValues.cursor || undefined
-        payload.limit = formValues.limit ? parseInt(formValues.limit) : undefined
-      }
-      if (cap.id === 'media' || cap.id === 'downloadRaw') {
-        payload.conversationId = formValues.conversationId || ''
-      }
-      if (cap.id === 'downloadRaw') {
-        payload.count = formValues.count ? parseInt(formValues.count) : 1
-      }
-      if (cap.id === 'edit') {
-        payload.title = formValues.title || ''
-      }
-      if (cap.id === 'create' || cap.id === 'summary') {
-        payload.prompt = formValues.prompt || ''
-      }
-      if (cap.id === 'summary') {
-        payload.systemPrompt = formValues.systemPrompt || undefined
-      }
-      if (cap.id === 'search') {
-        payload.query = formValues.query || ''
-      }
-      if (cap.id === 'sync') {
-        payload.searchResults = formValues.searchResults ? JSON.parse(formValues.searchResults) : []
-      }
-      if (cap.id === 'offline') {
-        payload.accountId = formValues.accountId || ''
+      for (const param of cap.params) {
+        if (param.type === 'number' && payload[param.name]) {
+          payload[param.name] = Number(payload[param.name])
+        }
+        if (param.type === 'boolean' && payload[param.name] !== undefined) {
+          payload[param.name] = payload[param.name] === 'true' || payload[param.name] === true
+        }
+        if (param.type === 'array' && typeof payload[param.name] === 'string') {
+          try { payload[param.name] = JSON.parse(payload[param.name] as string) } catch {}
+        }
       }
 
-      const data = await testCapability(cap.type, payload)
+      if (cap.id === 'protocol-test-suite') {
+        const suiteResult = await runProtocolTests({ providerId: activeProvider, accountId: activeAccountId || undefined })
+        setResult(suiteResult)
+        setStatus('success')
+        return
+      }
+
+      const data = await executeCapability(activeProvider, cap.id, activeAccountId || undefined, payload)
       setResult(data)
       setStatus('success')
     } catch (e: any) {
@@ -127,80 +355,24 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
       </CardHeader>
       <CardContent className="pb-2">
         <div className="space-y-2">
-          {cap.id === 'list' && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Cursor</Label>
-                <Input placeholder="Optional cursor" value={formValues.cursor || ''} onChange={(e) => updateField('cursor', e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs">Limit</Label>
-                <Input type="number" placeholder="100" value={formValues.limit || ''} onChange={(e) => updateField('limit', e.target.value)} />
-              </div>
-            </div>
-          )}
-          {(cap.id === 'fetch' || cap.id === 'edit' || cap.id === 'delete' || cap.id === 'url') && (
-            <div>
-              <Label className="text-xs">Conversation ID</Label>
-              <Input placeholder="c_xxx or xxx" value={formValues.conversationId || ''} onChange={(e) => updateField('conversationId', e.target.value)} />
-            </div>
-          )}
-          {cap.id === 'edit' && (
-            <div>
-              <Label className="text-xs">New Title</Label>
-              <Input placeholder="New title" value={formValues.title || ''} onChange={(e) => updateField('title', e.target.value)} />
-            </div>
-          )}
-          {(cap.id === 'create' || cap.id === 'summary') && (
-            <>
-              <div>
-                <Label className="text-xs">Prompt</Label>
-                <Textarea placeholder="Enter prompt..." value={formValues.prompt || ''} onChange={(e) => updateField('prompt', e.target.value)} />
-              </div>
-              {cap.id === 'summary' && (
-                <div>
-                  <Label className="text-xs">System Prompt (optional)</Label>
-                  <Textarea placeholder="System prompt..." value={formValues.systemPrompt || ''} onChange={(e) => updateField('systemPrompt', e.target.value)} />
-                </div>
+          {cap.params?.map(param => (
+            <div key={param.name}>
+              <Label className="text-xs">{param.name} {param.required ? '*' : ''}</Label>
+              {param.type === 'number' ? (
+                <Input type="number" placeholder={param.description} value={formValues[param.name] || ''} onChange={(e) => updateField(param.name, e.target.value)} />
+              ) : param.type === 'array' || param.name === 'prompt' || param.name === 'systemPrompt' || param.name === 'query' || param.name === 'searchResults' ? (
+                <Textarea placeholder={param.description} value={formValues[param.name] || ''} onChange={(e) => updateField(param.name, e.target.value)} />
+              ) : (
+                <Input placeholder={param.description} value={formValues[param.name] || ''} onChange={(e) => updateField(param.name, e.target.value)} />
               )}
-            </>
-          )}
-          {cap.id === 'search' && (
-            <div>
-              <Label className="text-xs">Search Query</Label>
-              <Input placeholder="Search term..." value={formValues.query || ''} onChange={(e) => updateField('query', e.target.value)} />
             </div>
-          )}
-          {cap.id === 'sync' && (
-            <div>
-              <Label className="text-xs">Search Results (JSON array)</Label>
-              <Textarea placeholder='[{"id":"xxx","title":"...","updated":123}]' value={formValues.searchResults || ''} onChange={(e) => updateField('searchResults', e.target.value)} />
-            </div>
-          )}
-          {cap.id === 'offline' && (
-            <div>
-              <Label className="text-xs">Account ID</Label>
-              <Input placeholder="Account ID" value={formValues.accountId || ''} onChange={(e) => updateField('accountId', e.target.value)} />
-            </div>
-          )}
-          {cap.id === 'media' && (
-            <div>
-              <Label className="text-xs">Conversation ID</Label>
-              <Input placeholder="c_xxx or xxx" value={formValues.conversationId || ''} onChange={(e) => updateField('conversationId', e.target.value)} />
-            </div>
-          )}
-          {cap.id === 'downloadRaw' && (
-            <div>
-              <Label className="text-xs">Number of conversations (default: 1)</Label>
-              <Input type="number" placeholder="1" value={formValues.count || '1'} onChange={(e) => updateField('count', e.target.value)} />
-            </div>
-          )}
+          ))}
         </div>
 
-        {status === 'success' && cap.id === 'media' && result?.media && (
+        {status === 'success' && cap.id === 'download-media' && result?.media && (
           <MediaGallery media={result.media} />
         )}
-        {status === 'success' && cap.id === 'downloadRaw' && result?.conversations && (
+        {status === 'success' && cap.id === 'download-raw' && result?.conversations && (
           <>
             <div className="flex flex-wrap gap-2 mt-3 text-xs">
               <Badge variant="secondary">Downloaded: {result.count}/{result.requested}</Badge>
@@ -212,12 +384,22 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
                   <h4 className="text-sm font-medium truncate">{conv.header?.title || conv.header?.id || 'Error'}</h4>
                   <div className="flex gap-1">
                     {conv.rawApiResponse && (
-                      <Button size="sm" variant="outline" onClick={() => exportJson(conv.rawApiResponse, `raw_${conv.header?.id}`)}>
+                      <Button size="sm" variant="outline" onClick={() => exportJson(nameRawApiResponse(conv.rawApiResponse), `raw_${conv.header?.id}`)} title="Raw API (named fields)">
                         <Download className="w-3 h-3" />
                       </Button>
                     )}
                     {conv.parsedMessages && (
-                      <Button size="sm" variant="outline" onClick={() => exportJson(conv.parsedMessages, `parsed_${conv.header?.id}`)}>
+                      <Button size="sm" variant="outline" onClick={() => exportJson(conv.parsedMessages, `parsed_${conv.header?.id}`)} title="Parsed messages">
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    )}
+                    {conv.media && conv.media.length > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => conv.media.forEach((m: any, idx: number) => downloadMediaFile(m.url, `media_${conv.header?.id}_${idx + 1}.${m.url.split('.').pop()?.split('?')[0] || 'png'}`))} title="Download media files">
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    )}
+                    {conv.media && conv.media.length > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => exportJson(conv.parsedMessages?.filter((m: any) => m.media?.length).map((m: any) => ({ text: m.text, media: m.media })) || [], `parsed_media_${conv.header?.id}`)} title="Parsed media metadata">
                         <Download className="w-3 h-3" />
                       </Button>
                     )}
@@ -249,13 +431,106 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
               </div>
             ))}
             <div className="flex gap-2 mt-3">
-              <Button size="sm" variant="outline" onClick={() => exportJson(result, `download_raw_${Date.now()}`)}>
-                <Download className="w-3 h-3 mr-1" /> Export All
+              <Button size="sm" variant="outline" onClick={() => exportJson(result.conversations.map((c: any) => nameRawApiResponse(c.rawApiResponse)).filter(Boolean), `raw_all_${Date.now()}`)}>
+                <Download className="w-3 h-3 mr-1" /> Export All Raw
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => exportJson(result.conversations.map((c: any) => ({ id: c.header?.id, title: c.header?.title, messages: c.parsedMessages, media: c.media })).filter((c: any) => c.messages?.length), `parsed_all_${Date.now()}`)}>
+                <Download className="w-3 h-3 mr-1" /> Export All Parsed
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                const allMedia = result.conversations.flatMap((c: any) => (c.media || []).map((m: any) => ({ url: m.url, conversationId: c.header?.id })))
+                downloadMediaFilesBatch(
+                  allMedia.map(m => m.url),
+                  (url, idx) => `media_${allMedia[idx].conversationId}_${idx + 1}.${url.split('.').pop()?.split('?')[0] || 'png'}`
+                )
+              }}>
+                <Download className="w-3 h-3 mr-1" /> Download All Media
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => exportJson(result.conversations.flatMap((c: any) => (c.parsedMessages || []).filter((m: any) => m.media?.length).map((m: any) => ({ text: m.text, media: m.media, conversationId: c.header?.id, conversationTitle: c.header?.title }))), `parsed_media_all_${Date.now()}`)}>
+                <Download className="w-3 h-3 mr-1" /> Export All Parsed Media
               </Button>
             </div>
           </>
         )}
-        {status === 'success' && cap.id !== 'downloadRaw' && <ResultDisplay result={result} />}
+        {status === 'success' && cap.id === 'deobfuscate' && result?.conversations && (
+          <>
+            {result.conversations.map((conv: any, i: number) => {
+              if (conv.error || !conv.rawApiResponse) return null
+              const analysis = deobfuscateRawResponse(conv.rawApiResponse)
+              return (
+                <div key={i} className="mt-3 p-3 rounded-md border">
+                  <h4 className="text-sm font-medium mb-2 truncate">{conv.header?.title || conv.header?.id || 'Error'}</h4>
+                  <div className="flex flex-wrap gap-2 text-xs mb-3">
+                    <Badge variant="secondary">{analysis.confirmed.length} confirmed fields</Badge>
+                    <Badge variant="secondary">{analysis.unknowns.length} unknown fields</Badge>
+                    <Badge variant="secondary">{Object.keys(analysis.taxonomy).length} total mapped</Badge>
+                  </div>
+                  {analysis.confirmed.length > 0 && (
+                    <details className="text-xs mb-2" open>
+                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Confirmed Fields ({analysis.confirmed.length})</summary>
+                      <pre className="mt-1 p-2 rounded bg-muted/50 overflow-auto max-h-64 text-[10px] whitespace-pre-wrap break-all font-mono">
+                        {JSON.stringify(analysis.confirmed, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  {analysis.unknowns.length > 0 && (
+                    <details className="text-xs mb-2">
+                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Unknown Fields ({analysis.unknowns.length})</summary>
+                      <pre className="mt-1 p-2 rounded bg-muted/50 overflow-auto max-h-64 text-[10px] whitespace-pre-wrap break-all font-mono">
+                        {JSON.stringify(analysis.unknowns, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Full Taxonomy ({Object.keys(analysis.taxonomy).length})</summary>
+                    <pre className="mt-1 p-2 rounded bg-muted/50 overflow-auto max-h-96 text-[10px] whitespace-pre-wrap break-all font-mono">
+                      {JSON.stringify(analysis.taxonomy, null, 2)}
+                    </pre>
+                  </details>
+                  <div className="flex gap-2 mt-3">
+                    <Button size="sm" variant="outline" onClick={() => exportJson(analysis, `deobfuscate_${conv.header?.id}_${Date.now()}`)}>
+                      <Download className="w-3 h-3 mr-1" /> Export Analysis
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )}
+        {status === 'success' && cap.id === 'protocol-test-suite' && result && (() => {
+          const suite = result as TestSuiteResult
+          return (
+            <>
+              <div className="flex flex-wrap gap-2 mt-3 text-xs">
+                <Badge variant="secondary">{suite.passed}/{suite.total} passed</Badge>
+                {suite.failed > 0 && <Badge variant="destructive">{suite.failed} failed</Badge>}
+                {suite.skipped > 0 && <Badge variant="secondary">{suite.skipped} skipped</Badge>}
+                <Badge variant="secondary">{(suite.duration / 1000).toFixed(1)}s</Badge>
+              </div>
+              <div className="mt-3 space-y-2">
+                {suite.tests.map((test, i) => (
+                  <div key={i} className="p-3 rounded-md border text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{test.name}</span>
+                      <Badge variant={test.status === 'pass' ? 'success' : test.status === 'fail' ? 'destructive' : 'secondary'}>
+                        {test.status}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground">{test.details}</p>
+                    {test.error && <p className="text-destructive mt-1">{test.error}</p>}
+                    <span className="text-muted-foreground">{test.duration}ms</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button size="sm" variant="outline" onClick={() => exportJson(result, `protocol_test_${Date.now()}`)}>
+                  <Download className="w-3 h-3 mr-1" /> Export Results
+                </Button>
+              </div>
+            </>
+          )
+        })()}
+        {status === 'success' && cap.id !== 'download-raw' && cap.id !== 'deobfuscate' && cap.id !== 'protocol-test-suite' && <ResultDisplay result={result} />}
         {status === 'error' && (
           <div className="mt-3 p-3 rounded-md bg-destructive/10 text-destructive text-xs">
             {error}
@@ -274,12 +549,15 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITIES[0] }) {
 
 export function CapabilitiesPanel() {
   return (
-    <div className="p-4 space-y-3">
-      <h2 className="text-base font-semibold mb-3">Capability Tests</h2>
-      <div className="grid grid-cols-1 gap-3">
-        {CAPABILITIES.map((cap) => (
-          <CapabilityCard key={cap.id} cap={cap} />
-        ))}
+    <div className="flex flex-col h-full">
+      <AccountSelector />
+      <div className="p-4 space-y-3 flex-1 overflow-auto">
+        <h2 className="text-base font-semibold mb-3">Capability Tests</h2>
+        <div className="grid grid-cols-1 gap-3">
+          {CAPABILITY_CARDS.map((cap) => (
+            <CapabilityCard key={cap.id} cap={cap} />
+          ))}
+        </div>
       </div>
     </div>
   )
