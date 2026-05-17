@@ -308,20 +308,30 @@ registry.registerHandler('get-rate-limit-status', async () => {
 registry.registerHandler('detect-accounts', async (ctx) => {
   const provider = getProvider(ctx.providerId)
   if (!provider) throw new Error(`Provider not found: ${ctx.providerId}`)
-  const accounts = await provider.detectAccounts()
-  const enriched = await Promise.all(accounts.map(async (acc: any) => {
-    const count = await idb.headers.filter((h: any) => h.accountId === acc.id).count()
-    return {
-      id: acc.id,
-      serviceId: acc.serviceId,
-      index: acc.index,
-      email: acc.email || '',
-      name: acc.name || '',
-      conversationCount: count,
-      lastSync: null,
+  try {
+    const accounts = await Promise.race([
+      provider.detectAccounts(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('detectAccounts timeout')), 10000)),
+    ])
+    const enriched = await Promise.all(accounts.map(async (acc: any) => {
+      const count = await idb.headers.filter((h: any) => h.accountId === acc.id).count()
+      return {
+        id: acc.id,
+        serviceId: acc.serviceId,
+        index: acc.index,
+        email: acc.email || '',
+        name: acc.name || '',
+        conversationCount: count,
+        lastSync: null,
+      }
+    }))
+    return enriched
+  } catch (e: any) {
+    if (e.message === 'detectAccounts timeout') {
+      return []
     }
-  }))
-  return enriched
+    throw e
+  }
 })
 
 registry.registerHandler('get-network-logs', async () => {
