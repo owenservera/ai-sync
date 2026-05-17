@@ -63,22 +63,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setRateLimitAutoResetMs: (v) => set({ rateLimitAutoResetMs: v }),
 
   loadSettings: async () => {
-    const settings = await testCapability('GET_SETTINGS')
-    if (settings) {
-      set({
-        manualSync: settings['settings.general.manualSync'] ?? defaults.manualSync,
-        syncMode: settings['settings.sync.mode'] ?? defaults.syncMode,
-        syncLastN: settings['settings.sync.lastN'] ?? defaults.syncLastN,
-        summaryOrgId: settings['settings.summary.orgId'] ?? defaults.summaryOrgId,
-        batchSize: settings['settings.pagination.batchSize'] ?? defaults.batchSize,
-        maxLimit: settings['settings.pagination.maxLimit'] ?? defaults.maxLimit,
-        maxPages: settings['settings.pagination.maxPages'] ?? defaults.maxPages,
-        rateLimitWindowMs: settings['settings.rateLimit.windowMs'] ?? defaults.rateLimitWindowMs,
-        rateLimitMaxRequests: settings['settings.rateLimit.maxRequests'] ?? defaults.rateLimitMaxRequests,
-        rateLimitMinGapMs: settings['settings.rateLimit.minGapMs'] ?? defaults.rateLimitMinGapMs,
-        rateLimitAutoResetMs: settings['settings.rateLimit.autoResetMs'] ?? defaults.rateLimitAutoResetMs,
-        isLoaded: true,
-      })
+    try {
+      const settings = await testCapability('GET_SETTINGS')
+      if (settings && typeof settings === 'object' && !('error' in settings)) {
+        set({
+          manualSync: settings['settings.general.manualSync'] ?? defaults.manualSync,
+          syncMode: settings['settings.sync.mode'] ?? defaults.syncMode,
+          syncLastN: settings['settings.sync.lastN'] ?? defaults.syncLastN,
+          summaryOrgId: settings['settings.summary.orgId'] ?? defaults.summaryOrgId,
+          batchSize: settings['settings.pagination.batchSize'] ?? defaults.batchSize,
+          maxLimit: settings['settings.pagination.maxLimit'] ?? defaults.maxLimit,
+          maxPages: settings['settings.pagination.maxPages'] ?? defaults.maxPages,
+          rateLimitWindowMs: settings['settings.rateLimit.windowMs'] ?? defaults.rateLimitWindowMs,
+          rateLimitMaxRequests: settings['settings.rateLimit.maxRequests'] ?? defaults.rateLimitMaxRequests,
+          rateLimitMinGapMs: settings['settings.rateLimit.minGapMs'] ?? defaults.rateLimitMinGapMs,
+          rateLimitAutoResetMs: settings['settings.rateLimit.autoResetMs'] ?? defaults.rateLimitAutoResetMs,
+          isLoaded: true,
+        })
+      }
+    } catch {
+      set({ isLoaded: true })
     }
   },
 
