@@ -1,0 +1,156 @@
+{
+  "taxonomy": {
+    "[0]": {
+      "path": "[0]",
+      "name": "messages",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Array of message tuples"
+    },
+    "[1]": {
+      "path": "[1]",
+      "name": "paginationCursor",
+      "type": "object",
+      "confidence": "high",
+      "notes": "Null or cursor array for next page"
+    },
+    "[2]": {
+      "path": "[2]",
+      "name": "responseMetadata",
+      "type": "object",
+      "confidence": "high",
+      "notes": "Contains media metadata and safety classifier results"
+    },
+    "[0][0][0]": {
+      "path": "[0][0][0]",
+      "name": "idPair",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[conversationId, messageId]"
+    },
+    "[0][0][1]": {
+      "path": "[0][0][1]",
+      "name": "parentInfo",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[?, parentId]"
+    },
+    "[0][0][2]": {
+      "path": "[0][0][2]",
+      "name": "userContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[[userText]]"
+    },
+    "[0][0][3]": {
+      "path": "[0][0][3]",
+      "name": "assistantResponse",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Complex response structure"
+    },
+    "[0][0][4]": {
+      "path": "[0][0][4]",
+      "name": "timestamp",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[seconds, nanoseconds]"
+    },
+    "[0][0][3][0][0][0]": {
+      "path": "[0][0][3][0][0][0]",
+      "name": "responseId",
+      "type": "string",
+      "confidence": "high"
+    },
+    "[0][0][3][0][0][1]": {
+      "path": "[0][0][3][0][0][1]",
+      "name": "responseContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[responseText, ...additionalParts]"
+    },
+    "[0][0][3][0][0][2]": {
+      "path": "[0][0][3][0][0][2]",
+      "name": "promptPreview",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][0][3][0][0][3]": {
+      "path": "[0][0][3][0][0][3]",
+      "name": "promptFull",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][0][3][5]": {
+      "path": "[0][0][3][5]",
+      "name": "locale",
+      "type": "string",
+      "confidence": "high",
+      "notes": "Value: [[null,[\"data_analysis_tool\",[null,null,\"Creating your image\",\"\"],4,[null,[],false]]]]"
+    }
+  },
+  "unknowns": [
+    {
+      "path": "[0][0][3][3]",
+      "value": "rc_c2bd20f889fd5c76",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][4]",
+      "value": "[[null,[\"data_analysis_tool\",[null,null,\"Creating your image\",\"\"],1,[null,[],false]]],[null,[\"data_analysis_tool\",[null,null,\"Creating your image\",\"\"],4,[null,[],false]]]]",
+      "context": "Type: array, Length: 2"
+    },
+    {
+      "path": "[0][0][3][8]",
+      "value": "ES",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][9]",
+      "value": true,
+      "context": "Type: boolean, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][14]",
+      "value": "fbb127bbb056c959",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][17]",
+      "value": "fbb127bbb056c959",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][21]",
+      "value": "Nano Banana 2",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][24]",
+      "value": 1,
+      "context": "Type: number, Length: N/A"
+    }
+  ],
+  "confirmed": [
+    {
+      "path": "[0]",
+      "name": "messages",
+      "confidence": "high"
+    },
+    {
+      "path": "[1]",
+      "name": "paginationCursor",
+      "confidence": "high"
+    },
+    {
+      "path": "[2]",
+      "name": "responseMetadata",
+      "confidence": "high"
+    },
+    {
+      "path": "[0][0][3][5]",
+      "name": "locale",
+      "confidence": "high"
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+{
+  "total": 19,
+  "passed": 13,
+  "failed": 4,
+  "skipped": 2,
+  "duration": 87746,
+  "tests": [
+    {
+      "name": "Ping / Connectivity",
+      "status": "pass",
+      "duration": 41,
+      "details": "Provider responded"
+    },
+    {
+      "name": "Offline Status Check",
+      "status": "pass",
+      "duration": 22,
+      "details": "Offline: true"
+    },
+    {
+      "name": "List Conversations (MaZiqc)",
+      "status": "skip",
+      "duration": 1263,
+      "details": "0 conversations | RPC: MaZiqc"
+    },
+    {
+      "name": "Fetch Existing (hNvQHb)",
+      "status": "skip",
+      "duration": 922,
+      "details": "No conversations"
+    },
+    {
+      "name": "Search (unqWSc)",
+      "status": "pass",
+      "duration": 1127,
+      "details": "25 results | RPC: unqWSc"
+    },
+    {
+      "name": "Fetch Gems (CNgdBe)",
+      "status": "pass",
+      "duration": 26729,
+      "details": "0 gems | RPC: CNgdBe"
+    },
+    {
+      "name": "Create Conversation (StreamGenerate)",
+      "status": "pass",
+      "duration": 3154,
+      "details": "Created 389be5b9ca77704f",
+      "response": {
+        "id": "389be5b9ca77704f",
+        "hasResponse": true,
+        "responseLength": 19
+      }
+    },
+    {
+      "name": "Verify Created Content (hNvQHb)",
+      "status": "fail",
+      "duration": 2281,
+      "details": "0 messages | user: false | assistant: false"
+    },
+    {
+      "name": "Verify Message Structure",
+      "status": "fail",
+      "duration": 1312,
+      "details": "No messages returned"
+    },
+    {
+      "name": "Create Image Generation (StreamGenerate)",
+      "status": "pass",
+      "duration": 18524,
+      "details": "Created de3d6c1dd9b0aab8",
+      "response": {
+        "id": "de3d6c1dd9b0aab8"
+      }
+    },
+    {
+      "name": "Verify Tool Calls (hNvQHb raw)",
+      "status": "fail",
+      "duration": 2578,
+      "details": "No tool calls found in response",
+      "response": {
+        "toolCallCount": 0,
+        "toolNames": []
+      }
+    },
+    {
+      "name": "Verify Media in Response",
+      "status": "pass",
+      "duration": 1334,
+      "details": "2 media items extracted",
+      "response": {
+        "mediaCount": 2,
+        "hasParsedMedia": true
+      }
+    },
+    {
+      "name": "Continue Conversation (Multi-Turn)",
+      "status": "pass",
+      "duration": 5510,
+      "details": "Created follow-up fd52e4bc36948b4e"
+    },
+    {
+      "name": "Verify Multi-Turn Structure",
+      "status": "fail",
+      "duration": 2453,
+      "details": "0 messages in follow-up conversation"
+    },
+    {
+      "name": "Edit Title (MUAZcd)",
+      "status": "pass",
+      "duration": 1118,
+      "details": "Edit call succeeded for 389be5b9ca77704f | RPC: MUAZcd"
+    },
+    {
+      "name": "Edit Prompt & Resend",
+      "status": "pass",
+      "duration": 6259,
+      "details": "Original: 13 chars, Edited: 82 chars",
+      "response": {
+        "originalLength": 13,
+        "editedLength": 82
+      }
+    },
+    {
+      "name": "Deobfuscate Text Response",
+      "status": "pass",
+      "duration": 1313,
+      "details": "8 confirmed | 0 unknowns",
+      "response": {
+        "confirmed": 8,
+        "unknowns": 0
+      }
+    },
+    {
+      "name": "Deobfuscate Tool Response",
+      "status": "pass",
+      "duration": 1168,
+      "details": "11 confirmed | 0 unknowns | safety classifiers: false",
+      "response": {
+        "confirmed": 11,
+        "unknowns": 0,
+        "hasSafetyClassifiers": false
+      }
+    },
+    {
+      "name": "Delete Test Conversations (GzXR5e)",
+      "status": "pass",
+      "duration": 10633,
+      "details": "Deleted 5/5 conversations"
+    }
+  ]
+}

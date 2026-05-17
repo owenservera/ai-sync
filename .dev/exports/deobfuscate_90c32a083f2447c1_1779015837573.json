@@ -1,0 +1,308 @@
+{
+  "taxonomy": {
+    "[0]": {
+      "path": "[0]",
+      "name": "messages",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Array of message tuples"
+    },
+    "[1]": {
+      "path": "[1]",
+      "name": "paginationCursor",
+      "type": "object",
+      "confidence": "high",
+      "notes": "Null or cursor array for next page"
+    },
+    "[2]": {
+      "path": "[2]",
+      "name": "responseMetadata",
+      "type": "object",
+      "confidence": "high",
+      "notes": "Contains media metadata and safety classifier results"
+    },
+    "[0][0][0]": {
+      "path": "[0][0][0]",
+      "name": "idPair",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[conversationId, messageId]"
+    },
+    "[0][0][1]": {
+      "path": "[0][0][1]",
+      "name": "parentInfo",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[?, parentId]"
+    },
+    "[0][0][2]": {
+      "path": "[0][0][2]",
+      "name": "userContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[[userText]]"
+    },
+    "[0][0][3]": {
+      "path": "[0][0][3]",
+      "name": "assistantResponse",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Complex response structure"
+    },
+    "[0][0][4]": {
+      "path": "[0][0][4]",
+      "name": "timestamp",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[seconds, nanoseconds]"
+    },
+    "[0][0][3][0][0][0]": {
+      "path": "[0][0][3][0][0][0]",
+      "name": "responseId",
+      "type": "string",
+      "confidence": "high"
+    },
+    "[0][0][3][0][0][1]": {
+      "path": "[0][0][3][0][0][1]",
+      "name": "responseContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[responseText, ...additionalParts]"
+    },
+    "[0][0][3][0][0][2]": {
+      "path": "[0][0][3][0][0][2]",
+      "name": "promptPreview",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][0][3][0][0][3]": {
+      "path": "[0][0][3][0][0][3]",
+      "name": "promptFull",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][0][3][0][1]": {
+      "path": "[0][0][3][0][1]",
+      "name": "toolCalls",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Array of tool execution traces"
+    },
+    "[0][0][3][0][2]": {
+      "path": "[0][0][3][0][2]",
+      "name": "toolResults",
+      "type": "any",
+      "confidence": "medium"
+    },
+    "[0][1][0]": {
+      "path": "[0][1][0]",
+      "name": "idPair",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[conversationId, messageId]"
+    },
+    "[0][1][1]": {
+      "path": "[0][1][1]",
+      "name": "parentInfo",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[?, parentId]"
+    },
+    "[0][1][2]": {
+      "path": "[0][1][2]",
+      "name": "userContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[[userText]]"
+    },
+    "[0][1][3]": {
+      "path": "[0][1][3]",
+      "name": "assistantResponse",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Complex response structure"
+    },
+    "[0][1][4]": {
+      "path": "[0][1][4]",
+      "name": "timestamp",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[seconds, nanoseconds]"
+    },
+    "[0][1][3][0][0][0]": {
+      "path": "[0][1][3][0][0][0]",
+      "name": "responseId",
+      "type": "string",
+      "confidence": "high"
+    },
+    "[0][1][3][0][0][1]": {
+      "path": "[0][1][3][0][0][1]",
+      "name": "responseContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[responseText, ...additionalParts]"
+    },
+    "[0][1][3][0][0][2]": {
+      "path": "[0][1][3][0][0][2]",
+      "name": "promptPreview",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][1][3][0][0][3]": {
+      "path": "[0][1][3][0][0][3]",
+      "name": "promptFull",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][1][3][0][1]": {
+      "path": "[0][1][3][0][1]",
+      "name": "toolCalls",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Array of tool execution traces"
+    },
+    "[0][1][3][0][2]": {
+      "path": "[0][1][3][0][2]",
+      "name": "toolResults",
+      "type": "any",
+      "confidence": "medium"
+    },
+    "[0][2][0]": {
+      "path": "[0][2][0]",
+      "name": "idPair",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[conversationId, messageId]"
+    },
+    "[0][2][1]": {
+      "path": "[0][2][1]",
+      "name": "parentInfo",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[?, parentId]"
+    },
+    "[0][2][2]": {
+      "path": "[0][2][2]",
+      "name": "userContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[[userText]]"
+    },
+    "[0][2][3]": {
+      "path": "[0][2][3]",
+      "name": "assistantResponse",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Complex response structure"
+    },
+    "[0][2][4]": {
+      "path": "[0][2][4]",
+      "name": "timestamp",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[seconds, nanoseconds]"
+    },
+    "[0][2][3][0][0][0]": {
+      "path": "[0][2][3][0][0][0]",
+      "name": "responseId",
+      "type": "string",
+      "confidence": "high"
+    },
+    "[0][2][3][0][0][1]": {
+      "path": "[0][2][3][0][0][1]",
+      "name": "responseContent",
+      "type": "array",
+      "confidence": "high",
+      "notes": "[responseText, ...additionalParts]"
+    },
+    "[0][2][3][0][0][2]": {
+      "path": "[0][2][3][0][0][2]",
+      "name": "promptPreview",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][2][3][0][0][3]": {
+      "path": "[0][2][3][0][0][3]",
+      "name": "promptFull",
+      "type": "string|null",
+      "confidence": "medium"
+    },
+    "[0][2][3][0][1]": {
+      "path": "[0][2][3][0][1]",
+      "name": "toolCalls",
+      "type": "array",
+      "confidence": "high",
+      "notes": "Array of tool execution traces"
+    },
+    "[0][2][3][0][2]": {
+      "path": "[0][2][3][0][2]",
+      "name": "toolResults",
+      "type": "any",
+      "confidence": "medium"
+    }
+  },
+  "unknowns": [
+    {
+      "path": "[0][0][3][3]",
+      "value": "rc_f8635e3b2ff60074",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][8]",
+      "value": "ES",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][0][3][24]",
+      "value": 1,
+      "context": "Type: number, Length: N/A"
+    },
+    {
+      "path": "[0][1][3][3]",
+      "value": "rc_761b4eeb96071888",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][1][3][8]",
+      "value": "ES",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][1][3][24]",
+      "value": 1,
+      "context": "Type: number, Length: N/A"
+    },
+    {
+      "path": "[0][2][3][3]",
+      "value": "rc_5b65005d7d04341d",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][2][3][8]",
+      "value": "ES",
+      "context": "Type: string, Length: N/A"
+    },
+    {
+      "path": "[0][2][3][24]",
+      "value": 1,
+      "context": "Type: number, Length: N/A"
+    }
+  ],
+  "confirmed": [
+    {
+      "path": "[0]",
+      "name": "messages",
+      "confidence": "high"
+    },
+    {
+      "path": "[1]",
+      "name": "paginationCursor",
+      "confidence": "high"
+    },
+    {
+      "path": "[2]",
+      "name": "responseMetadata",
+      "confidence": "high"
+    }
+  ]
+}

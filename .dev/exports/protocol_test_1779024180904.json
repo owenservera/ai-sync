@@ -1,0 +1,162 @@
+{
+  "total": 19,
+  "passed": 16,
+  "failed": 1,
+  "skipped": 2,
+  "duration": 92896,
+  "tests": [
+    {
+      "name": "Ping / Connectivity",
+      "status": "pass",
+      "duration": 2410,
+      "details": "Provider responded"
+    },
+    {
+      "name": "Offline Status Check",
+      "status": "pass",
+      "duration": 11,
+      "details": "Offline: true"
+    },
+    {
+      "name": "List Conversations (MaZiqc)",
+      "status": "skip",
+      "duration": 869,
+      "details": "0 conversations | RPC: MaZiqc"
+    },
+    {
+      "name": "Fetch Existing (hNvQHb)",
+      "status": "skip",
+      "duration": 1435,
+      "details": "No conversations"
+    },
+    {
+      "name": "Search (unqWSc)",
+      "status": "pass",
+      "duration": 965,
+      "details": "25 results | RPC: unqWSc"
+    },
+    {
+      "name": "Fetch Gems (CNgdBe)",
+      "status": "pass",
+      "duration": 22066,
+      "details": "0 gems | RPC: CNgdBe"
+    },
+    {
+      "name": "Create Conversation (StreamGenerate)",
+      "status": "pass",
+      "duration": 2927,
+      "details": "Created a65e310ec48336de",
+      "response": {
+        "id": "a65e310ec48336de",
+        "hasResponse": true,
+        "responseLength": 19
+      }
+    },
+    {
+      "name": "Verify Created Content (hNvQHb)",
+      "status": "pass",
+      "duration": 4050,
+      "details": "2 messages | user: true | assistant: true"
+    },
+    {
+      "name": "Verify Message Structure",
+      "status": "pass",
+      "duration": 1337,
+      "details": "All message fields present and linked correctly",
+      "response": {
+        "userHasId": true,
+        "userHasContent": true,
+        "userHasTimestamp": true,
+        "assistantHasId": true,
+        "assistantHasContent": true,
+        "assistantHasTimestamp": true,
+        "assistantHasParent": true,
+        "parentLinksCorrect": true
+      }
+    },
+    {
+      "name": "Create Image Generation (StreamGenerate)",
+      "status": "pass",
+      "duration": 17880,
+      "details": "Created e691eee09065f362",
+      "response": {
+        "id": "e691eee09065f362"
+      }
+    },
+    {
+      "name": "Verify Tool Calls (hNvQHb raw)",
+      "status": "fail",
+      "duration": 2571,
+      "details": "No tool calls found in response[0][1]",
+      "response": {
+        "toolCallCount": 0,
+        "toolNames": []
+      }
+    },
+    {
+      "name": "Verify Media in Response",
+      "status": "pass",
+      "duration": 955,
+      "details": "2 media items extracted",
+      "response": {
+        "mediaCount": 2,
+        "hasParsedMedia": true
+      }
+    },
+    {
+      "name": "Continue Conversation (Multi-Turn)",
+      "status": "pass",
+      "duration": 5452,
+      "details": "Created follow-up 0a9956eefa40eb2b"
+    },
+    {
+      "name": "Verify Multi-Turn Structure",
+      "status": "pass",
+      "duration": 2395,
+      "details": "2 messages in follow-up conversation"
+    },
+    {
+      "name": "Edit Title (MUAZcd)",
+      "status": "pass",
+      "duration": 1452,
+      "details": "Edit call succeeded for a65e310ec48336de | RPC: MUAZcd"
+    },
+    {
+      "name": "Edit Prompt & Resend",
+      "status": "pass",
+      "duration": 13153,
+      "details": "Original: 62 chars, Edited: 65 chars",
+      "response": {
+        "originalLength": 62,
+        "editedLength": 65
+      }
+    },
+    {
+      "name": "Deobfuscate Text Response",
+      "status": "pass",
+      "duration": 1277,
+      "details": "8 confirmed | 0 unknowns",
+      "response": {
+        "confirmed": 8,
+        "unknowns": 0
+      }
+    },
+    {
+      "name": "Deobfuscate Tool Response",
+      "status": "pass",
+      "duration": 1232,
+      "details": "11 confirmed | 0 unknowns | safety classifiers: false",
+      "response": {
+        "confirmed": 11,
+        "unknowns": 0,
+        "hasSafetyClassifiers": false
+      }
+    },
+    {
+      "name": "Delete Test Conversations (GzXR5e)",
+      "status": "pass",
+      "duration": 10458,
+      "details": "Deleted 5/5 conversations"
+    }
+  ]
+}

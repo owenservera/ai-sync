@@ -1,0 +1,132 @@
+{
+  "total": 19,
+  "passed": 4,
+  "failed": 3,
+  "skipped": 12,
+  "duration": 17888,
+  "tests": [
+    {
+      "name": "Ping / Connectivity",
+      "status": "pass",
+      "duration": 55,
+      "details": "Provider responded"
+    },
+    {
+      "name": "Offline Status Check",
+      "status": "pass",
+      "duration": 21,
+      "details": "Offline: false"
+    },
+    {
+      "name": "List Conversations (MaZiqc)",
+      "status": "skip",
+      "duration": 1655,
+      "details": "0 conversations | RPC: MaZiqc"
+    },
+    {
+      "name": "Fetch Existing (hNvQHb)",
+      "status": "skip",
+      "duration": 1236,
+      "details": "No conversations"
+    },
+    {
+      "name": "Search (unqWSc)",
+      "status": "pass",
+      "duration": 1137,
+      "details": "25 results | RPC: unqWSc"
+    },
+    {
+      "name": "Fetch Gems (CNgdBe)",
+      "status": "pass",
+      "duration": 12985,
+      "details": "0 gems | RPC: CNgdBe"
+    },
+    {
+      "name": "Create Conversation (StreamGenerate)",
+      "status": "fail",
+      "duration": 205,
+      "details": "No ID returned",
+      "response": {
+        "hasResponse": false,
+        "responseLength": 0
+      }
+    },
+    {
+      "name": "Verify Created Content",
+      "status": "skip",
+      "duration": 0,
+      "details": "No conversation"
+    },
+    {
+      "name": "Verify Message Structure",
+      "status": "skip",
+      "duration": 0,
+      "details": "No conversation"
+    },
+    {
+      "name": "Create Image Generation (StreamGenerate)",
+      "status": "fail",
+      "duration": 191,
+      "details": "No ID returned",
+      "response": {}
+    },
+    {
+      "name": "Verify Tool Calls",
+      "status": "skip",
+      "duration": 0,
+      "details": "No image conversation"
+    },
+    {
+      "name": "Verify Media in Response",
+      "status": "skip",
+      "duration": 0,
+      "details": "No image conversation"
+    },
+    {
+      "name": "Continue Conversation (Multi-Turn)",
+      "status": "skip",
+      "duration": 0,
+      "details": "No conversation"
+    },
+    {
+      "name": "Verify Multi-Turn Structure",
+      "status": "skip",
+      "duration": 0,
+      "details": "No follow-up"
+    },
+    {
+      "name": "Edit Title (MUAZcd)",
+      "status": "skip",
+      "duration": 0,
+      "details": "No conversation"
+    },
+    {
+      "name": "Edit Prompt & Resend",
+      "status": "fail",
+      "duration": 400,
+      "details": "Original: 0 chars, Edited: 0 chars",
+      "response": {
+        "originalLength": 0,
+        "editedLength": 0
+      }
+    },
+    {
+      "name": "Deobfuscate Text Response",
+      "status": "skip",
+      "duration": 0,
+      "details": "No text conversation"
+    },
+    {
+      "name": "Deobfuscate Tool Response",
+      "status": "skip",
+      "duration": 0,
+      "details": "No tool conversation"
+    },
+    {
+      "name": "Delete Test Conversations (GzXR5e)",
+      "status": "skip",
+      "duration": 0,
+      "details": "Nothing to delete"
+    }
+  ]
+}

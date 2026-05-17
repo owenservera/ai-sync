@@ -1,0 +1,97 @@
+{
+  "total": 11,
+  "passed": 8,
+  "failed": 1,
+  "skipped": 2,
+  "duration": 41276,
+  "tests": [
+    {
+      "name": "Ping / Connectivity",
+      "status": "pass",
+      "duration": 1126,
+      "details": "Provider responded successfully"
+    },
+    {
+      "name": "Offline Status Check",
+      "status": "pass",
+      "duration": 15,
+      "details": "Offline status: true"
+    },
+    {
+      "name": "List Conversations (MaZiqc)",
+      "status": "skip",
+      "duration": 1047,
+      "details": "Fetched 0 conversations | RPC: MaZiqc",
+      "response": {
+        "count": 0,
+        "hasCursor": false
+      }
+    },
+    {
+      "name": "Fetch Conversation (hNvQHb)",
+      "status": "skip",
+      "duration": 780,
+      "details": "No conversations available to fetch"
+    },
+    {
+      "name": "Search Conversations (unqWSc)",
+      "status": "pass",
+      "duration": 1156,
+      "details": "Search returned 25 results for \"test\" | RPC: unqWSc",
+      "response": {
+        "count": 25
+      }
+    },
+    {
+      "name": "Fetch All Gems (CNgdBe + MaZiqc)",
+      "status": "pass",
+      "duration": 30379,
+      "details": "Found 0 Gem conversations | RPCs: CNgdBe, MaZiqc",
+      "response": {
+        "count": 0
+      }
+    },
+    {
+      "name": "Create Conversation (StreamGenerate)",
+      "status": "pass",
+      "duration": 3075,
+      "details": "Created conversation 9ed57cca6c8b5dae | Endpoint: StreamGenerate",
+      "response": {
+        "conversationId": "9ed57cca6c8b5dae",
+        "hasResponse": true
+      }
+    },
+    {
+      "name": "Edit Title (MUAZcd)",
+      "status": "pass",
+      "duration": 817,
+      "details": "Edited conversation 9ed57cca6c8b5dae title | RPC: MUAZcd"
+    },
+    {
+      "name": "Fetch Created Content (hNvQHb)",
+      "status": "fail",
+      "duration": 1546,
+      "details": "Fetched 0 messages | user: undefined | assistant: undefined",
+      "response": {
+        "messageCount": 0
+      }
+    },
+    {
+      "name": "Deobfuscate Raw Response",
+      "status": "pass",
+      "duration": 617,
+      "details": "12 confirmed fields | 0 unknowns | 21 total mapped",
+      "response": {
+        "confirmed": 12,
+        "unknowns": 0,
+        "totalMapped": 21
+      }
+    },
+    {
+      "name": "Delete Test Conversations (GzXR5e)",
+      "status": "pass",
+      "duration": 714,
+      "details": "Deleted 1/1 test conversations | RPC: GzXR5e"
+    }
+  ]
+}
