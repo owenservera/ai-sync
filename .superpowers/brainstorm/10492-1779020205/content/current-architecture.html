@@ -1,0 +1,53 @@
+<h2>Current Architecture — What We Have</h2>
+<p class="subtitle">Multi-provider Chrome Extension for archiving AI conversations</p>
+
+<div class="section">
+  <h3>Current Structure</h3>
+  <div class="mockup">
+    <div class="mockup-header">src/ — File Layout</div>
+    <div class="mockup-body">
+      <div style="font-family: monospace; font-size: 13px; line-height: 1.8; padding: 12px;">
+        <div><span style="color: #888;">types.ts</span> — Shared types (Account, Header, Conversation, ProviderConfig, capabilities)</div>
+        <div><span style="color: #888;">idb.ts</span> — Dexie IndexedDB (5 tables + helper methods)</div>
+        <div><span style="color: #888;">common.ts</span> — Shared utils (delay, fetchServiceApi, captureException)</div>
+        <div><span style="color: #888;">sync-manager.ts</span> — Orchestrates sync across providers</div>
+        <div><span style="color: #888;">LiveStorage.ts</span> — Reactive storage layer</div>
+        <br>
+        <div><span style="color: #888;">providers/</span></div>
+        <div>&nbsp;&nbsp;<span style="color: #888;">provider-interface.ts</span> — ConversationProvider contract (90 lines)</div>
+        <div>&nbsp;&nbsp;<span style="color: #888;">provider-registry.ts</span> — Simple Map registry (19 lines)</div>
+        <div>&nbsp;&nbsp;<span style="color: #888;">gemini/</span> <span style="color: #e74c3c;">— 6 files, ~746 lines of working logic</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;index.ts, auth.ts, rpc.ts, parser.ts, network.ts, rate-limiter.ts</div>
+        <div>&nbsp;&nbsp;<span style="color: #888;">openai/</span> <span style="color: #f39c12;">— stub (57 lines)</span></div>
+        <div>&nbsp;&nbsp;<span style="color: #888;">claude/</span> <span style="color: #f39c12;">— stub (57 lines)</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Pain Points</h3>
+  <div class="pros-cons">
+    <div class="cons">
+      <h4>What's Scattered</h4>
+      <ul>
+        <li>RPC IDs hardcoded in Gemini (MaZiqc, hNvQHb, etc.) — no central registry</li>
+        <li>Constants (domains, URLs, origins) duplicated across config + implementation</li>
+        <li>Parser logic, auth flows, network handlers split across 6 files per provider</li>
+        <li>No way to test a provider in isolation without loading the full extension</li>
+        <li>Adding a new provider = reading 746 lines of Gemini to understand the pattern</li>
+        <li>Contracts (ProviderConfig, capabilities) defined in types.ts but enforced manually</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Goal</h3>
+  <p style="font-size: 15px; line-height: 1.6;">One central control layer where <strong>functions, constants, methods, and contracts</strong> are registered and managed — enabling:</p>
+  <ul style="font-size: 14px; line-height: 1.8;">
+    <li>Quicker development — new provider = fill in a template, not reverse-engineer Gemini</li>
+    <li>Easier testing — unit test each provider method in isolation</li>
+    <li>Easy onboarding — add providers, methods, protocol types without touching core logic</li>
+  </ul>
+</div>
