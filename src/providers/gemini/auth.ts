@@ -4,6 +4,31 @@ import { type AuthProfile } from '../../types'
 const GEMINI_ORIGIN = 'https://gemini.google.com'
 
 const profileCache = new Map<number, { token: string; timestamp: number; id: string | null; email?: string; name?: string }>()
+const STORAGE_KEY = 'gemini_profile_cache'
+
+async function loadPersistedCache(): Promise<void> {
+  try {
+    const data = await chrome.storage.local.get(STORAGE_KEY)
+    const persisted = data[STORAGE_KEY]
+    if (persisted && typeof persisted === 'object') {
+      for (const [key, value] of Object.entries(persisted)) {
+        profileCache.set(Number(key), value as any)
+      }
+    }
+  } catch {
+  }
+}
+
+async function persistCache(): Promise<void> {
+  try {
+    const obj: Record<string, unknown> = {}
+    profileCache.forEach((value, key) => { obj[key] = value })
+    await chrome.storage.local.set({ [STORAGE_KEY]: obj })
+  } catch {
+  }
+}
+
+loadPersistedCache()
 
 export function extractQuotedValue(key: string, text: string): string | undefined {
   return text.match(RegExp(`"${key}":"([^"]+)"`))?.[1]
@@ -62,6 +87,7 @@ export async function fetchProfile(userIndex: number = 0): Promise<AuthProfile |
         email: profile.email,
         name: profile.name,
       })
+      persistCache()
     } else {
       logError('gemini:fetchProfile', `No auth token extracted from profile | userIndex: ${userIndex}`)
     }

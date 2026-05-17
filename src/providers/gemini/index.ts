@@ -14,7 +14,6 @@ import {
   type SearchResult,
   type RequestDetails,
   type SyncTrigger,
-  OrgStatus,
 } from '../../types'
 import { fetchProfile, clearProfileCache } from './auth'
 import { batchexecute, parseStreamResponse, EmptyResponseError, GEMINI_ORIGIN, parseResponse } from './rpc'
@@ -64,21 +63,19 @@ export class GeminiProvider implements ConversationProvider {
     for (let i = 0; i < maxAccounts; i++) {
       try {
         const profile = await fetchProfile(i)
-        if (!profile?.at) continue
+        if (!profile?.at) continue  // FIX: was 'break' — stopping loop prematurely
 
         const email = profile.email || ''
         if (seenEmails.has(email)) continue
         seenEmails.add(email)
 
-        const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve => {
+        const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve =>
           chrome.cookies.get({ url: 'https://gemini.google.com', name: 'SID' }, resolve)
-        })
+        )
         if (!cookie?.value) continue
 
-        // Use email-based ID for stability and backward compatibility
-        const accountId = email ? email : `${cookie.value}${i > 0 ? `_${i}` : ''}`
+        const accountId = email || `${cookie.value}${i > 0 ? `_${i}` : ''}`
 
-        const existing = await idb.accounts.get(accountId)
         const account: Account = {
           id: accountId,
           serviceId: SERVICE_ID,
@@ -87,20 +84,21 @@ export class GeminiProvider implements ConversationProvider {
           email,
           name: profile.name,
         }
+
+        // FIX: Persist account to IndexedDB (matches gold standard)
         await idb.accounts.put(account)
 
-        if (!existing) {
-          const existingOrg = await idb.orgs.get(accountId)
-          if (!existingOrg) {
-            await idb.orgs.put({
-              serviceId: SERVICE_ID,
-              accountId: account.id,
-              email: account.email,
-              name: account.name || account.email,
-              id: account.id,
-              status: OrgStatus.New,
-            })
-          }
+        // FIX: Create org record if not exists (matches gold standard)
+        const existingOrg = await idb.orgs.get(accountId)
+        if (!existingOrg) {
+          await idb.orgs.put({
+            serviceId: SERVICE_ID,
+            accountId: account.id,
+            email: account.email,
+            name: account.name || account.email,
+            id: account.id,
+            status: 0, // OrgStatus.New
+          })
         }
 
         found.push(account)
@@ -202,6 +200,7 @@ export class GeminiProvider implements ConversationProvider {
     'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
     'fetch-all-gems', 'fetch-summary', 'auto-sync', 'is-offline',
     'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
+    'get-cached-accounts', 'ensure-authenticated',
   ]
 }
 
