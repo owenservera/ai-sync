@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import { useAppStore } from '@/stores/appStore'
 import { testCapability } from '@/lib/messaging'
 import { User, RefreshCw, Loader2, CheckCircle2, Mail, Hash, Database, Clock } from 'lucide-react'
+import { AccountSelector } from './AccountSelector'
 
 interface AccountInfo {
   id: string
@@ -30,7 +31,8 @@ export function AccountsPanel() {
     setLoading(true)
     try {
       const result = await testCapability('GET_ACCOUNTS', { serviceId: activeProvider })
-      setAccounts(result || [])
+      const list = Array.isArray(result) ? result : []
+      setAccounts(list)
 
       const active = await testCapability('GET_ACTIVE_ACCOUNT')
       if (active?.['settings.accounts.activeId']) {
@@ -38,6 +40,7 @@ export function AccountsPanel() {
       }
     } catch (e) {
       console.error('Failed to load accounts:', e)
+      setAccounts([])
     } finally {
       setLoading(false)
     }
@@ -68,7 +71,9 @@ export function AccountsPanel() {
   }
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="flex flex-col h-full">
+      <AccountSelector />
+      <div className="p-4 space-y-3 flex-1 overflow-auto">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Accounts</h2>
         <Button variant="outline" size="sm" onClick={loadAccounts} disabled={loading}>
@@ -147,6 +152,7 @@ export function AccountsPanel() {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }

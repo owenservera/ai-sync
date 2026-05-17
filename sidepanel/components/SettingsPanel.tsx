@@ -9,6 +9,7 @@ import { useSettingsStore, type SyncMode } from '@/stores/settingsStore'
 import { testCapability } from '@/lib/messaging'
 import { useState } from 'react'
 import { Save, Shield, RefreshCw, Clock, Zap, Hand } from 'lucide-react'
+import { AccountSelector } from './AccountSelector'
 
 const SYNC_MODES: { value: SyncMode; label: string; description: string; icon: typeof Zap }[] = [
   { value: 'sync-all', label: 'Sync All', description: 'Download all conversations (up to 500)', icon: RefreshCw },
@@ -47,14 +48,16 @@ export function SettingsPanel() {
   async function checkRateLimit() {
     try {
       const result = await testCapability('GET_RATE_LIMIT_STATUS')
-      alert(`Rate limited: ${result.isRateLimited}`)
+      alert(`Rate limited: ${result?.isRateLimited ?? 'unknown'}`)
     } catch (e: any) {
       alert(`Error: ${e.message}`)
     }
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="flex flex-col h-full">
+      <AccountSelector />
+      <div className="p-4 space-y-4 flex-1 overflow-auto">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Settings</h2>
         <Button variant="outline" size="sm" onClick={handleSave} disabled={saving}>
@@ -211,6 +214,7 @@ export function SettingsPanel() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

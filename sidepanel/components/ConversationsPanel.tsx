@@ -8,6 +8,7 @@ import { testCapability } from '@/lib/messaging'
 import { useAppStore } from '@/stores/appStore'
 import { MessageSquare, ExternalLink, Search, RefreshCw, Loader2, Clock, Image } from 'lucide-react'
 import { MediaGallery } from './MediaGallery'
+import { AccountSelector } from './AccountSelector'
 import { extractMediaFromMessages } from '@/lib/media-extract'
 import type { MediaItem } from '@/lib/media-extract'
 
@@ -24,11 +25,10 @@ interface Header {
 }
 
 export function ConversationsPanel() {
-  const { activeAccountId } = useAppStore()
+  const { activeAccountId, activeProvider } = useAppStore()
   const [conversations, setConversations] = useState<Header[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedProvider, setSelectedProvider] = useState('gemini')
   const [viewingConversation, setViewingConversation] = useState<Header | null>(null)
   const [messages, setMessages] = useState<Array<{ role: string; content: string; timestamp: number }>>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -37,15 +37,16 @@ export function ConversationsPanel() {
 
   useEffect(() => {
     loadConversations()
-  }, [selectedProvider])
+  }, [activeProvider])
 
   async function loadConversations() {
     setLoading(true)
     try {
-      const allConversations: Header[] = await testCapability('GET_ALL_HEADERS', { serviceId: selectedProvider, accountId: activeAccountId || undefined })
-      setConversations(allConversations || [])
+      const allConversations: Header[] = await testCapability('GET_ALL_HEADERS', { serviceId: activeProvider, accountId: activeAccountId || undefined })
+      setConversations(Array.isArray(allConversations) ? allConversations : [])
     } catch (e) {
       console.error('Failed to load conversations:', e)
+      setConversations([])
     } finally {
       setLoading(false)
     }
@@ -58,7 +59,7 @@ export function ConversationsPanel() {
     setShowMedia(false)
     try {
       const result = await testCapability('TEST_FETCH_CONTENT', {
-        providerId: selectedProvider,
+        providerId: activeProvider,
         conversationId: conv.id,
         accountId: activeAccountId || undefined,
       })
@@ -78,7 +79,7 @@ export function ConversationsPanel() {
   async function openInGemini(conv: Header) {
     try {
       const url = await testCapability('TEST_GET_CHAT_URL', {
-        providerId: selectedProvider,
+        providerId: activeProvider,
         conversationId: conv.id,
       })
       window.open(url, '_blank')
@@ -108,7 +109,9 @@ export function ConversationsPanel() {
 
   if (viewingConversation) {
     return (
-      <div className="p-4 space-y-3">
+      <div className="flex flex-col h-full">
+        <AccountSelector />
+        <div className="p-4 space-y-3 flex-1 overflow-auto">
         <div className="flex items-center justify-between">
           <Button variant="outline" size="sm" onClick={() => { setViewingConversation(null); setMessages([]); setMediaItems([]); setShowMedia(false) }}>
             &larr; Back
@@ -152,41 +155,31 @@ export function ConversationsPanel() {
         )}
 
         {showMedia && <MediaGallery media={mediaItems} />}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Button variant="outline" size="sm" onClick={loadConversations} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-
-      <div className="flex gap-2">
-        {['gemini', 'openai', 'claude'].map(p => (
-          <Button
-            key={p}
-            variant={selectedProvider === p ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSelectedProvider(p)}
-          >
-            {p.charAt(0).toUpperCase() + p.slice(1)}
+    <div className="flex flex-col h-full">
+      <AccountSelector />
+      <div className="p-4 space-y-3 flex-1 overflow-auto">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={loadConversations} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-        ))}
-      </div>
+        </div>
 
-      <p className="text-xs text-muted-foreground">{filtered.length} conversations</p>
+        <p className="text-xs text-muted-foreground">{filtered.length} conversations</p>
 
       {loading && (
         <div className="flex items-center justify-center py-8">
@@ -233,6 +226,7 @@ export function ConversationsPanel() {
             </CardContent>
           </Card>
         ))}
+      </div>
       </div>
     </div>
   )

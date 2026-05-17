@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { testCapability } from '@/lib/messaging'
 import { Activity, Trash2, Circle } from 'lucide-react'
+import { AccountSelector } from './AccountSelector'
 
 interface LogEntry {
   id: string
@@ -73,7 +74,9 @@ export function NetworkLogPanel() {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="flex flex-col h-full">
+      <AccountSelector />
+      <div className="p-4 space-y-4 flex-1 overflow-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-muted-foreground" />
@@ -151,6 +154,7 @@ export function NetworkLogPanel() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }
