@@ -17,7 +17,8 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["sidepanel/*"]
+      "@/*": ["sidepanel/*"],
+      "@src/*": ["src/*"]
     }
   },
   "include": ["src/**/*.ts", "background/**/*.ts", "sidepanel/**/*.ts", "sidepanel/**/*.tsx"],
