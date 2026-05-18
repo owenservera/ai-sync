@@ -1,29 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAccount } from '@/contexts/AccountContext'
 import { useAppStore } from '@/stores/appStore'
-import { testCapability } from '@/lib/messaging'
 import { User, ChevronDown, CheckCircle2, RefreshCw } from 'lucide-react'
 
-interface AccountInfo {
-  id: string
-  serviceId: string
-  index: number
-  email: string
-  name?: string
-  conversationCount: number
-  lastSync: number | null
-}
-
 export function AccountSelector() {
-  const { activeProvider, activeAccountId, setActiveProvider, setActiveAccountId, providers } = useAppStore()
-  const [accounts, setAccounts] = useState<AccountInfo[]>([])
-  const [loading, setLoading] = useState(false)
+  const { activeProvider, setActiveProvider } = useAppStore()
+  const { activeAccount, accounts, loading, switchAccount, refreshAccounts } = useAccount()
   const [showAccountDropdown, setShowAccountDropdown] = useState(false)
   const [showProviderDropdown, setShowProviderDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    loadAccounts()
-  }, [activeProvider])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -36,39 +21,14 @@ export function AccountSelector() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  async function loadAccounts() {
-    setLoading(true)
-    try {
-      const result = await testCapability('GET_ACCOUNTS', { serviceId: activeProvider })
-      const list = Array.isArray(result) ? result : []
-      setAccounts(list)
-
-      if (list.length > 0 && !activeAccountId) {
-        const first = list[0].id
-        setActiveAccountId(first)
-        await testCapability('SET_ACTIVE_ACCOUNT', { accountId: first })
-      }
-    } catch (e) {
-      console.error('Failed to load accounts:', e)
-      setAccounts([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function switchAccount(accountId: string) {
-    setActiveAccountId(accountId)
-    await testCapability('SET_ACTIVE_ACCOUNT', { accountId })
-    setShowAccountDropdown(false)
-  }
-
   async function switchProvider(providerId: string) {
     setActiveProvider(providerId)
     setShowProviderDropdown(false)
+    // Refresh accounts for the new provider
+    refreshAccounts()
   }
 
-  const activeAccount = accounts.find(a => a.id === activeAccountId) || accounts[0] || null
-  const activeProviderName = providers.find(p => p.id === activeProvider)?.name || activeProvider.charAt(0).toUpperCase() + activeProvider.slice(1)
+  const activeProviderName = activeProvider.charAt(0).toUpperCase() + activeProvider.slice(1)
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30" ref={dropdownRef}>
@@ -106,7 +66,7 @@ export function AccountSelector() {
         <button
           onClick={() => { setShowAccountDropdown(!showAccountDropdown); setShowProviderDropdown(false) }}
           className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md hover:bg-muted transition-colors min-w-0"
-          disabled={accounts.length === 0}
+          disabled={loading || accounts.length === 0}
         >
           <User className="w-3 h-3 text-muted-foreground flex-shrink-0" />
           <span className="truncate max-w-[150px] text-foreground">
@@ -118,7 +78,7 @@ export function AccountSelector() {
           <div className="absolute top-full left-0 mt-1 py-1 bg-popover border border-border rounded-md shadow-md z-50 min-w-[220px] max-h-[200px] overflow-auto">
             <div className="px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider">Switch Account</div>
             {accounts.map(acc => {
-              const isActive = acc.id === activeAccountId
+              const isActive = acc.id === activeAccount?.id
               return (
                 <button
                   key={acc.id}
@@ -139,7 +99,7 @@ export function AccountSelector() {
       </div>
 
       <button
-        onClick={loadAccounts}
+        onClick={refreshAccounts}
         disabled={loading}
         className="ml-auto p-1 rounded hover:bg-muted transition-colors"
         title="Refresh accounts"

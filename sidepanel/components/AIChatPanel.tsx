@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useChatStore } from '@/stores/chatStore'
+import { useAccount } from '@/contexts/AccountContext'
 import { useAppStore } from '@/stores/appStore'
 import { AccountSelector } from './AccountSelector'
 import { MediaGallery } from './MediaGallery'
@@ -230,7 +231,8 @@ function ConversationSidebar({
 }
 
 export function AIChatPanel() {
-  const { activeProvider, activeAccountId } = useAppStore()
+  const { activeAccount } = useAccount()
+  const { activeProvider } = useAppStore()
   const {
     messages,
     mediaItems,
@@ -276,7 +278,7 @@ export function AIChatPanel() {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-    await sendMessage(activeProvider, activeAccountId || undefined, trimmed)
+    await sendMessage(activeProvider, activeAccount?.id || undefined, trimmed)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {

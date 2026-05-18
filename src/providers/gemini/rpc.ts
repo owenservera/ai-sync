@@ -1,6 +1,7 @@
 import { delay, fetchServiceApi } from '../../common'
 import { logError, logWarn, emitRateLimitEvent } from '../../log'
 import { idb } from '../../idb'
+import { syncOrchestrator } from '../../sync/SyncOrchestrator'
 import { RateLimiter } from './rate-limiter'
 
 export const GEMINI_ORIGIN = 'https://gemini.google.com'
@@ -34,7 +35,7 @@ export async function parseResponse(response: Response): Promise<any> {
     url.href.includes('/sorry/index') ||
     text.includes('www.google.com/sorry/') || text.includes('sorry/index') ||
     text.includes('captcha') ||
-    (response.status === 200 && url.hostname.includes('google.com') && text.length < 1000 && !text.includes(rpcids))
+    (response.status === 200 && url.hostname.includes('google.com') && text.length < 1000 && !text.includes(rpcids!))
 
   if (isSorryPage) {
     logError('gemini:parser', `Google rate limit/CAPTCHA detected | url: ${url.href} | status: ${response.status} | textLength: ${text.length}`)
@@ -47,11 +48,8 @@ export async function parseResponse(response: Response): Promise<any> {
       rateLimitNotificationCache.set(SERVICE_ID, Date.now())
     }
 
-    setTimeout(async () => {
-      await idb.services.update(SERVICE_ID, { isRateLimited: false })
-      rateLimiter.reset()
-      emitRateLimitEvent(SERVICE_ID, false)
-    }, 300000)
+    // Use alarm-backed rate limit reset (survives SW termination) — fix M4
+    await syncOrchestrator.setRateLimit(SERVICE_ID, 5)
 
     const error = new Error('Gemini rate limit detected (Google sorry page)') as any
     error.status = 429
@@ -100,7 +98,7 @@ function getData(key: string, text: string): any {
     }
 
     return innerParsed
-  } catch (error) {
+  } catch (error: any) {
     logError('gemini:getData', `Parse failed | key: ${key} | error: ${JSON.stringify(error?.message || error)}`)
     return null
   }
@@ -153,7 +151,7 @@ export async function batchexecute(
       status: error?.response?.status,
       message: error?.message,
       index,
-      reqLength: typeof args === 'string' ? args.length : 0,
+      reqLength: args.length,
     }
     logError('gemini:rpc', `RPC failed | ${JSON.stringify(context)}`)
     throw error
@@ -194,7 +192,8 @@ export async function parseStreamResponse(response: Response): Promise<{ id?: st
             responseContent = altBlock
           }
         }
-      } catch {
+      } catch (parseError: any) {
+        logWarn('gemini:rpc', `parseStreamResponse: skipping unparseable entry | ${parseError?.message || parseError}`)
         continue
       }
     }

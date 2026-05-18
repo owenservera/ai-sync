@@ -75,7 +75,7 @@ async function testPing(payload: Record<string, unknown>): Promise<TestResult> {
   const start = Date.now()
   try {
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_PING', payload)
+    const result = await testCapability<any>('TEST_PING', payload)
     return { name: 'Ping / Connectivity', status: result ? 'pass' : 'fail', duration: Date.now() - start, details: result ? 'Provider responded' : 'No response' }
   } catch (e: any) {
     return { name: 'Ping / Connectivity', status: 'fail', duration: Date.now() - start, details: 'Connectivity check failed', error: e.message }
@@ -86,7 +86,7 @@ async function testOfflineStatus(payload: Record<string, unknown>): Promise<Test
   const start = Date.now()
   try {
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_IS_OFFLINE', payload)
+    const result = await testCapability<any>('TEST_IS_OFFLINE', payload)
     return { name: 'Offline Status Check', status: 'pass', duration: Date.now() - start, details: `Offline: ${result}` }
   } catch (e: any) {
     return { name: 'Offline Status Check', status: 'fail', duration: Date.now() - start, details: 'Failed', error: e.message }
@@ -97,7 +97,7 @@ async function testListConversations(payload: Record<string, unknown>): Promise<
   const start = Date.now()
   try {
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_LIST_CONVERSATIONS', { ...payload, limit: 5 })
+    const result = await testCapability<any>('TEST_LIST_CONVERSATIONS', { ...payload, limit: 5 })
     const count = Array.isArray(result) ? result.length : 0
     return { name: 'List Conversations (MaZiqc)', status: count > 0 ? 'pass' : 'skip', duration: Date.now() - start, details: `${count} conversations | RPC: MaZiqc` }
   } catch (e: any) {
@@ -111,7 +111,7 @@ async function testFetchExistingConversation(payload: Record<string, unknown>): 
     const { testCapability } = await import('../lib/messaging')
     const list = await testCapability('TEST_LIST_CONVERSATIONS', { ...payload, limit: 1 })
     if (!Array.isArray(list) || list.length === 0) return { name: 'Fetch Existing (hNvQHb)', status: 'skip', duration: Date.now() - start, details: 'No conversations' }
-    const result = await testCapability('TEST_FETCH_CONTENT', { ...payload, conversationId: list[0]?.id })
+    const result = await testCapability<any>('TEST_FETCH_CONTENT', { ...payload, conversationId: list[0]?.id })
     const msgCount = result?.messages?.length || 0
     return { name: 'Fetch Existing (hNvQHb)', status: msgCount > 0 ? 'pass' : 'fail', duration: Date.now() - start, details: `${msgCount} messages from ${list[0]?.id}` }
   } catch (e: any) {
@@ -146,7 +146,7 @@ async function testCreateConversation(payload: Record<string, unknown>, createdI
   try {
     const { testCapability } = await import('../lib/messaging')
     const prompt = `Protocol test ${Date.now()} - reply "OK"`
-    const result = await testCapability('TEST_CREATE_CONVERSATION', { ...payload, prompt })
+    const result = await testCapability<any>('TEST_CREATE_CONVERSATION', { ...payload, prompt })
     if (result?.id) createdIds.push(result.id)
     return {
       name: 'Create Conversation (StreamGenerate)',
@@ -167,7 +167,7 @@ async function testVerifyCreatedContent(payload: Record<string, unknown>, create
     await new Promise(r => setTimeout(r, 3000))
     const { testCapability } = await import('../lib/messaging')
     const convId = createdIds[createdIds.length - 1]
-    const result = await testCapability('TEST_FETCH_CONTENT', { ...payload, conversationId: convId })
+    const result = await testCapability<any>('TEST_FETCH_CONTENT', { ...payload, conversationId: convId })
     const msgs = result?.messages || []
     const hasUser = msgs.some((m: any) => m.role === 'user')
     const hasAssistant = msgs.some((m: any) => m.role === 'assistant')
@@ -197,7 +197,7 @@ async function testVerifyMessageStructure(payload: Record<string, unknown>, crea
     await new Promise(r => setTimeout(r, 1000))
     const { testCapability } = await import('../lib/messaging')
     const convId = createdIds[createdIds.length - 1]
-    const result = await testCapability('TEST_FETCH_CONTENT', { ...payload, conversationId: convId })
+    const result = await testCapability<any>('TEST_FETCH_CONTENT', { ...payload, conversationId: convId })
     const msgs = result?.messages || []
     if (msgs.length === 0) return { name: 'Verify Message Structure', status: 'fail', duration: Date.now() - start, details: 'No messages returned' }
     const userMsg = msgs.find((m: any) => m.role === 'user')
@@ -230,7 +230,7 @@ async function testCreateImageGeneration(payload: Record<string, unknown>, creat
   try {
     const { testCapability } = await import('../lib/messaging')
     const prompt = `Create an image of a red apple on a white background`
-    const result = await testCapability('TEST_CREATE_CONVERSATION', { ...payload, prompt })
+    const result = await testCapability<any>('TEST_CREATE_CONVERSATION', { ...payload, prompt })
     if (result?.id) createdIds.push(result.id)
     return {
       name: 'Create Image Generation (StreamGenerate)',
@@ -251,7 +251,7 @@ async function testVerifyToolCalls(payload: Record<string, unknown>, createdIds:
     if (!imageConvId) return { name: 'Verify Tool Calls', status: 'skip', duration: Date.now() - start, details: 'No image conversation' }
     await new Promise(r => setTimeout(r, 2000))
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_DOWNLOAD_RAW', { ...payload, conversationId: imageConvId, count: 1 })
+    const result = await testCapability<any>('TEST_DOWNLOAD_RAW', { ...payload, conversationId: imageConvId, count: 1 })
     const conv = result?.conversations?.[0]
     if (!conv?.rawApiResponse) return { name: 'Verify Tool Calls', status: 'fail', duration: Date.now() - start, details: 'No raw response' }
     const raw = conv.rawApiResponse
@@ -277,7 +277,7 @@ async function testVerifyMediaInResponse(payload: Record<string, unknown>, creat
     const imageConvId = createdIds[createdIds.length - 1]
     if (!imageConvId) return { name: 'Verify Media in Response', status: 'skip', duration: Date.now() - start, details: 'No image conversation' }
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_DOWNLOAD_RAW', { ...payload, conversationId: imageConvId, count: 1 })
+    const result = await testCapability<any>('TEST_DOWNLOAD_RAW', { ...payload, conversationId: imageConvId, count: 1 })
     const conv = result?.conversations?.[0]
     if (!conv) return { name: 'Verify Media in Response', status: 'fail', duration: Date.now() - start, details: 'Conversation not found' }
     const hasMedia = conv.media?.length > 0
@@ -301,7 +301,7 @@ async function testContinueConversation(payload: Record<string, unknown>, create
     if (!convId) return { name: 'Continue Conversation (Multi-Turn)', status: 'skip', duration: Date.now() - start, details: 'No conversation' }
     const { testCapability } = await import('../lib/messaging')
     const followUp = `Follow up: what color is the apple?`
-    const result = await testCapability('TEST_CREATE_CONVERSATION', { ...payload, prompt: followUp })
+    const result = await testCapability<any>('TEST_CREATE_CONVERSATION', { ...payload, prompt: followUp })
     if (result?.id) createdIds.push(result.id)
     return {
       name: 'Continue Conversation (Multi-Turn)',
@@ -321,7 +321,7 @@ async function testVerifyMultiTurnStructure(payload: Record<string, unknown>, cr
     if (!followUpId) return { name: 'Verify Multi-Turn Structure', status: 'skip', duration: Date.now() - start, details: 'No follow-up' }
     await new Promise(r => setTimeout(r, 2000))
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_FETCH_CONTENT', { ...payload, conversationId: followUpId })
+    const result = await testCapability<any>('TEST_FETCH_CONTENT', { ...payload, conversationId: followUpId })
     const msgs = result?.messages || []
     return {
       name: 'Verify Multi-Turn Structure',
@@ -358,10 +358,10 @@ async function testEditPromptAndResend(payload: Record<string, unknown>, created
   try {
     const { testCapability } = await import('../lib/messaging')
     const originalPrompt = `Test prompt ${Date.now()} - reply briefly`
-    const result = await testCapability('TEST_CREATE_CONVERSATION', { ...payload, prompt: originalPrompt })
+    const result = await testCapability<any>('TEST_CREATE_CONVERSATION', { ...payload, prompt: originalPrompt })
     if (result?.id) createdIds.push(result.id)
     const editedPrompt = `Edited: ${originalPrompt} - now reply in detail`
-    const editedResult = await testCapability('TEST_CREATE_CONVERSATION', { ...payload, prompt: editedPrompt })
+    const editedResult = await testCapability<any>('TEST_CREATE_CONVERSATION', { ...payload, prompt: editedPrompt })
     if (editedResult?.id) createdIds.push(editedResult.id)
     const originalContent = result?.response || ''
     const editedContent = editedResult?.response || ''
@@ -384,7 +384,7 @@ async function testDeobfuscateTextResponse(payload: Record<string, unknown>, cre
     if (!textConvId) return { name: 'Deobfuscate Text Response', status: 'skip', duration: Date.now() - start, details: 'No text conversation' }
     await new Promise(r => setTimeout(r, 1000))
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_DOWNLOAD_RAW', { ...payload, conversationId: textConvId, count: 1 })
+    const result = await testCapability<any>('TEST_DOWNLOAD_RAW', { ...payload, conversationId: textConvId, count: 1 })
     const conv = result?.conversations?.[0]
     if (!conv?.rawApiResponse) return { name: 'Deobfuscate Text Response', status: 'fail', duration: Date.now() - start, details: 'No raw response' }
     const { deobfuscateRawResponse } = await import('./raw-api-taxonomy')
@@ -407,7 +407,7 @@ async function testDeobfuscateToolResponse(payload: Record<string, unknown>, cre
     const imageConvId = createdIds.length > 1 ? createdIds[1] : null
     if (!imageConvId) return { name: 'Deobfuscate Tool Response', status: 'skip', duration: Date.now() - start, details: 'No tool conversation' }
     const { testCapability } = await import('../lib/messaging')
-    const result = await testCapability('TEST_DOWNLOAD_RAW', { ...payload, conversationId: imageConvId, count: 1 })
+    const result = await testCapability<any>('TEST_DOWNLOAD_RAW', { ...payload, conversationId: imageConvId, count: 1 })
     const conv = result?.conversations?.[0]
     if (!conv?.rawApiResponse) return { name: 'Deobfuscate Tool Response', status: 'fail', duration: Date.now() - start, details: 'No raw response' }
     const { deobfuscateRawResponse } = await import('./raw-api-taxonomy')
@@ -435,7 +435,9 @@ async function testDeleteConversations(payload: Record<string, unknown>, created
       try {
         await testCapability('TEST_DELETE_CONVERSATION', { ...payload, conversationId: convId })
         deleted++
-      } catch {}
+      } catch (delErr: unknown) {
+        console.warn('[protocol-test] Failed to delete test conversation', delErr)
+      }
     }
     return {
       name: 'Delete Test Conversations (GzXR5e)',

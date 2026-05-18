@@ -2,13 +2,32 @@ import { registerProvider, getProvider } from '../src/providers/provider-registr
 import { GeminiProvider } from '../src/providers/gemini/index'
 import { OpenAIProvider } from '../src/providers/openai/index'
 import { ClaudeProvider } from '../src/providers/claude/index'
-import { syncManager } from '../src/sync-manager'
+import { syncOrchestrator } from '../src/sync/SyncOrchestrator'
+import { backgroundTabRegistry } from '../src/content/tab-registry'
+import { accountManager } from '../src/accounts/AccountManager'
 import { idb } from '../src/idb'
 import { LiveStorage } from '../src/LiveStorage'
-import { log, logError } from '../src/log'
+import { log, logWarn, logError, setDebugMode } from '../src/log'
 import { type Account, type Org, type RequestDetails } from '../src/types'
 import { engine } from '../src/capabilities/engine'
 import '../src/capabilities/handlers'
+
+// EARLY DEBUG: confirm service worker is starting
+log('SW', '=== Service worker starting ===')
+
+// Initialize sync orchestrator on SW startup
+syncOrchestrator.init().catch(err => {
+  logError('SW', 'SyncOrchestrator init failed', err)
+})
+
+// Initialize background tab registry for bridge capability resolution
+backgroundTabRegistry.init()
+
+// Check debug mode from settings on SW startup
+chrome.storage.local.get('settings.general.debug', (data) => {
+  setDebugMode(data['settings.general.debug'] ?? false)
+  log('SW', `Debug mode: ${data['settings.general.debug'] ?? false}`)
+})
 
 // ── Initialize providers ──
 
@@ -31,14 +50,21 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // ── Side panel behavior ──
 
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch(e => logError('SW', `Side panel behavior error: ${e}`))
+try {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch(e => logError('SW', `Side panel behavior error: ${e}`))
+} catch (e) {
+  logError('SW', `Side panel init error (likely Chrome version): ${e}`)
+}
 
 // ── Handle network requests (auto-sync for supported providers) ──
 
 chrome.webRequest.onBeforeRequest.addListener(
-  async (details) => {
+  (details) => {
+    // SECURITY: Skip extension-originated requests (our own fetch calls) — fix H8
+    if (details.tabId === -1 || details.initiator === chrome.runtime.id) return
+
     const url = details.url || ''
     const requestBody = details.requestBody?.raw?.[0]?.bytes
       ? new TextDecoder().decode(details.requestBody.raw[0].bytes)
@@ -54,14 +80,22 @@ chrome.webRequest.onBeforeRequest.addListener(
 
     // Route to Gemini network handler
     if (url.includes('gemini.google.com')) {
-      const trigger = await gemini.handleNetworkActivity(requestDetails)
-      if (trigger) {
-        // FIX: Use cached accounts from IDB instead of expensive re-scan on every trigger
-        const accounts = await idb.accounts.filter((a: any) => a.serviceId === 'gemini' && a.token).toArray()
-        for (const account of accounts) {
-          syncManager.syncProvider(gemini, account)
+      gemini.handleNetworkActivity(requestDetails).then(trigger => {
+        if (trigger) {
+          // FIX: Use accountManager for cached account access — fix C4
+          accountManager.listAccounts('gemini').then(accounts => {
+            for (const account of accounts) {
+              syncOrchestrator.syncProvider(gemini, account).catch(err => {
+                logError('SW', `Auto-sync failed for ${account.id}`, err)
+              })
+            }
+          }).catch(err => {
+            logError('SW', 'Failed to list accounts for auto-sync', err)
+          })
         }
-      }
+      }).catch(err => {
+        logError('SW', 'Network activity handler failed', err)
+      })
     }
   },
   {
@@ -80,15 +114,37 @@ chrome.alarms.create('periodic-sync', { periodInMinutes: 15 })
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'periodic-sync') {
     log('SW', 'Periodic sync triggered')
-    await syncManager.syncAll()
+    await syncOrchestrator.syncAll()
   }
 })
 
 // ── Message routing via capability engine ──
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // SECURITY: Reject messages from external sources (fix C1)
+  if (sender.id !== chrome.runtime.id) {
+    logError('SW', `Unauthorized message sender: ${sender.id}`)
+    sendResponse({ error: 'Unauthorized sender' })
+    return false
+  }
+
+  log('SW', `onMessage received: ${message.type}`)
+
   if (message.type === 'CAPABILITY_EXECUTE') {
-    engine.execute(message).then(sendResponse).catch(e => sendResponse({ error: e.message }))
+    log('SW', `routing CAPABILITY_EXECUTE: ${message.capabilityId}`)
+    // FIX H4: Extract known fields only — no legacy spread
+    engine.execute({
+      providerId: message.providerId ?? message.serviceId,
+      capabilityId: message.capabilityId,
+      accountId: message.accountId,
+      params: message.params ?? {},
+    }).then(result => {
+      log('SW', `CAPABILITY_EXECUTE success: ${message.capabilityId}`)
+      sendResponse(result)
+    }).catch(e => {
+      logError('SW', `CAPABILITY_EXECUTE error: ${message.capabilityId}`, e)
+      sendResponse({ error: e.message })
+    })
     return true
   }
 
@@ -127,13 +183,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   const capabilityId = legacyMap[message.type]
   if (capabilityId) {
+    const providerId = message.providerId || message.serviceId
+    log('SW', `legacy message mapped: ${message.type} -> ${capabilityId}`)
+    // FIX H4: Extract known fields only — no legacy spread
     engine.execute({
-      ...message,
+      providerId: providerId,
       capabilityId,
-      providerId: message.providerId || message.serviceId,
-    }).then(sendResponse).catch(e => sendResponse({ error: e.message }))
+      accountId: message.accountId,
+      params: {},
+    }).then(result => {
+      log('SW', `legacy engine.execute success: ${message.type}`)
+      sendResponse(result)
+    }).catch(e => {
+      logError('SW', `legacy engine.execute error: ${message.type}`, e)
+      sendResponse({ error: e.message })
+    })
     return true
   }
+
+  logWarn('SW', `unhandled message type: ${message.type}`)
 })
 
 log('SW', 'Service worker loaded')

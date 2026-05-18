@@ -1,55 +1,15 @@
-import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { useAccount } from '@/contexts/AccountContext'
 import { useAppStore } from '@/stores/appStore'
-import { testCapability } from '@/lib/messaging'
 import { User, RefreshCw, Loader2, CheckCircle2, Mail, Hash, Database, Clock } from 'lucide-react'
 import { AccountSelector } from './AccountSelector'
 
-interface AccountInfo {
-  id: string
-  serviceId: string
-  index: number
-  email: string
-  name?: string
-  conversationCount: number
-  lastSync: number | null
-}
-
 export function AccountsPanel() {
-  const { activeProvider, activeAccountId, setActiveAccountId } = useAppStore()
-  const [accounts, setAccounts] = useState<AccountInfo[]>([])
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    loadAccounts()
-  }, [activeProvider])
-
-  async function loadAccounts() {
-    setLoading(true)
-    try {
-      const result = await testCapability('GET_ACCOUNTS', { serviceId: activeProvider })
-      const list = Array.isArray(result) ? result : []
-      setAccounts(list)
-
-      const active = await testCapability('GET_ACTIVE_ACCOUNT')
-      if (active?.['settings.accounts.activeId']) {
-        setActiveAccountId(active['settings.accounts.activeId'])
-      }
-    } catch (e) {
-      console.error('Failed to load accounts:', e)
-      setAccounts([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function switchAccount(accountId: string) {
-    setActiveAccountId(accountId)
-    await testCapability('SET_ACTIVE_ACCOUNT', { accountId })
-  }
+  const { activeProvider } = useAppStore()
+  const { activeAccount, accounts, loading, switchAccount, refreshAccounts } = useAccount()
 
   function formatTime(ts: number | null) {
     if (!ts) return 'Never'
@@ -76,7 +36,7 @@ export function AccountsPanel() {
       <div className="p-4 space-y-3 flex-1 overflow-auto">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Accounts</h2>
-        <Button variant="outline" size="sm" onClick={loadAccounts} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={refreshAccounts} disabled={loading}>
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
@@ -99,7 +59,7 @@ export function AccountsPanel() {
 
       <div className="space-y-2">
         {accounts.map((acc) => {
-          const isActive = acc.id === activeAccountId || (!activeAccountId && acc.id === accounts[0]?.id)
+          const isActive = acc.id === activeAccount?.id || (!activeAccount && acc.id === accounts[0]?.id)
           return (
             <Card
               key={acc.id}
@@ -121,7 +81,7 @@ export function AccountsPanel() {
                       </span>
                       <span className="flex items-center gap-1">
                         <Database className="w-3 h-3" />
-                        {acc.conversationCount} conversations
+                        {(acc as any).conversationCount ?? 0} conversations
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -144,7 +104,7 @@ export function AccountsPanel() {
           <div className="p-3 rounded-md border bg-muted/30">
             <p className="text-xs text-muted-foreground">
               <Mail className="w-3 h-3 inline mr-1" />
-              Active account: <span className="font-medium text-foreground">{accounts.find(a => a.id === activeAccountId || (!activeAccountId && a.id === accounts[0]?.id))?.email || 'None'}</span>
+              Active account: <span className="font-medium text-foreground">{activeAccount?.email || 'None'}</span>
             </p>
             <p className="text-[10px] text-muted-foreground mt-1">
               Click any account card above to switch. All tests and syncs will use the active account.

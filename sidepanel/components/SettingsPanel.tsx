@@ -47,7 +47,7 @@ export function SettingsPanel() {
 
   async function checkRateLimit() {
     try {
-      const result = await testCapability('GET_RATE_LIMIT_STATUS')
+      const result = await testCapability<any>('GET_RATE_LIMIT_STATUS')
       alert(`Rate limited: ${result?.isRateLimited ?? 'unknown'}`)
     } catch (e: any) {
       alert(`Error: ${e.message}`)

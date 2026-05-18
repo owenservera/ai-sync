@@ -21,14 +21,17 @@ class ApiEngine {
     const provider = getProvider(providerId)
     if (!provider) throw new Error(`Provider not found: ${providerId}`)
 
-    // Step 1: Try cached accounts from IDB
+    // Step 1: Try cached accounts from IDB (with or without token — token may be populated later by network)
     const cached = await idb.accounts
-      .filter((a: any) => a.serviceId === providerId && a.token)
+      .filter((a: any) => a.serviceId === providerId)
       .toArray()
     if (cached.length > 0) {
+      // Prefer accounts with tokens, but fall back to any account
+      const withToken = cached.find((a: any) => a.token)
+      const preferred = withToken || cached[0]
       return accountId
-        ? cached.find((a: any) => a.id === accountId)
-        : cached[0]
+        ? cached.find((a: any) => a.id === accountId) || preferred
+        : preferred
     }
 
     // Step 2: Fallback to provider.detectAccounts() (network call)

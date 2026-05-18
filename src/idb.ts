@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import { type Account, type Org, OrgStatus, type Header, type Conversation, type ServiceState } from './types'
+import { AccountStatus } from './types'
 
 class ConversationArchiveDB extends Dexie {
   headers!: Table<Header, string>
@@ -7,6 +8,7 @@ class ConversationArchiveDB extends Dexie {
   orgs!: Table<Org, string>
   conversations!: Table<Conversation, string>
   services!: Table<ServiceState, string>
+  settings!: Table<{ key: string; value: any }, string>
 
   constructor() {
     super('ConversationArchive')
@@ -17,6 +19,37 @@ class ConversationArchiveDB extends Dexie {
       orgs: 'id, serviceId, accountId, email',
       conversations: 'id, orgId, serviceId, updated',
       services: 'id',
+    })
+
+    // Schema v2: merged Org into Account, removed services table
+    this.version(2).stores({
+      accounts: 'id, serviceId, email, status',
+      headers: 'id, accountId, serviceId, updated',
+      conversations: 'id, accountId, serviceId, updated',
+      settings: 'key',
+    }).upgrade(async (tx) => {
+      // Migrate Org data into Account records
+      const orgs = await tx.table('orgs').toArray()
+      for (const org of orgs) {
+        const account = await tx.table('accounts').get(org.accountId)
+        if (account) {
+          await tx.table('accounts').update(org.accountId, {
+            ...account,
+            status: org.status === 'inactive' ? 'expired' : 'active',
+          })
+        }
+      }
+
+      // Migrate services.current to settings
+      const services = await tx.table('services').toArray()
+      for (const svc of services) {
+        if (svc.current?.accountId) {
+          await tx.table('settings').put({
+            key: `activeAccountId.${svc.id}`,
+            value: svc.current.accountId,
+          })
+        }
+      }
     })
 
     // Attach helper methods
@@ -59,9 +92,11 @@ class ConversationArchiveDB extends Dexie {
           id,
           serviceId: data.serviceId || '',
           index: data.index ?? 0,
-          token: data.token || '',
           email: data.email || '',
           name: data.name,
+          status: data.status ?? AccountStatus.Discovered,
+          lastVerified: data.lastVerified ?? Date.now(),
+          lastSync: data.lastSync ?? null,
         }
         await accounts.put(account)
         return account

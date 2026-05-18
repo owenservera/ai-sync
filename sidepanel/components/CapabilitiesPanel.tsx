@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { useAccount } from '@/contexts/AccountContext'
 import { useAppStore } from '@/stores/appStore'
 import { executeCapability } from '@/lib/messaging'
 import { registry } from '@src/capabilities/registry'
@@ -287,7 +288,8 @@ function nameRawApiResponse(raw: any): any {
 }
 
 function CapabilityCard({ cap }: { cap: typeof CAPABILITY_CARDS[0] }) {
-  const { activeProvider, activeAccountId } = useAppStore()
+  const { activeAccount } = useAccount()
+  const { activeProvider } = useAppStore()
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
@@ -320,13 +322,13 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITY_CARDS[0] }) {
       }
 
       if (cap.id === 'protocol-test-suite') {
-        const suiteResult = await runProtocolTests({ providerId: activeProvider, accountId: activeAccountId || undefined })
+        const suiteResult = await runProtocolTests({ providerId: activeProvider, accountId: activeAccount?.id || undefined })
         setResult(suiteResult)
         setStatus('success')
         return
       }
 
-      const data = await executeCapability(activeProvider, cap.id, activeAccountId || undefined, payload)
+      const data = await executeCapability(activeProvider, cap.id, activeAccount?.id || undefined, payload)
       setResult(data)
       setStatus('success')
     } catch (e: any) {
@@ -440,7 +442,7 @@ function CapabilityCard({ cap }: { cap: typeof CAPABILITY_CARDS[0] }) {
               <Button size="sm" variant="outline" onClick={() => {
                 const allMedia = result.conversations.flatMap((c: any) => (c.media || []).map((m: any) => ({ url: m.url, conversationId: c.header?.id })))
                 downloadMediaFilesBatch(
-                  allMedia.map(m => m.url),
+                  allMedia.map((m: any) => m.url),
                   (url, idx) => `media_${allMedia[idx].conversationId}_${idx + 1}.${url.split('.').pop()?.split('?')[0] || 'png'}`
                 )
               }}>

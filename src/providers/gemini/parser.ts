@@ -83,7 +83,7 @@ export function msgToIdb(data: any[]): [Message, Message] | null {
         timestamp: ts,
       },
     ]
-  } catch (error) {
+  } catch (error: any) {
     logWarn('gemini:msgToIdb', `Failed to parse message | error: ${JSON.stringify(error?.message || error)}`)
     return null
   }

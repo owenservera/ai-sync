@@ -1,6 +1,7 @@
 import { log, logInfo, logError, logWarn } from '../../log'
 import { idb } from '../../idb'
 import { delay, fetchServiceApi, captureException } from '../../common'
+import { TokenVault } from '../../accounts/TokenVault'
 import {
   type ConversationProvider,
 } from '../provider-interface'
@@ -14,11 +15,13 @@ import {
   type SearchResult,
   type RequestDetails,
   type SyncTrigger,
+  OrgStatus,
+  AccountStatus,
 } from '../../types'
 import { fetchProfile, clearProfileCache } from './auth'
 import { batchexecute, parseStreamResponse, EmptyResponseError, GEMINI_ORIGIN, parseResponse } from './rpc'
 import { dataToHeader, msgToIdb, parseSearchResults } from './parser'
-import { handleNetworkActivity, onGoogleAccountFetch } from './network'
+import { handleNetworkActivity as handleNetworkActivityFn, onGoogleAccountFetch } from './network'
 import { LiveStorage } from '../../LiveStorage'
 
 const SERVICE_ID = 'gemini'
@@ -33,16 +36,6 @@ export class GeminiProvider implements ConversationProvider {
     name: 'Gemini',
     domain: GEMINI_DOMAIN,
     origins: ['https://gemini.google.com/*'],
-    capabilities: [
-      { type: 'conversation-list', label: 'List Conversations', description: 'List all conversations with pagination' },
-      { type: 'message-fetch', label: 'Fetch Messages', description: 'Download full conversation history' },
-      { type: 'search', label: 'Search', description: 'Search conversations by text query' },
-      { type: 'auto-sync', label: 'Auto Sync', description: 'Automatically sync on network activity' },
-      { type: 'edit-title', label: 'Edit Title', description: 'Rename conversations' },
-      { type: 'delete-conversation', label: 'Delete', description: 'Delete conversations' },
-      { type: 'create-conversation', label: 'Create', description: 'Create new conversations' },
-      { type: 'summary', label: 'Summarize', description: 'Generate summaries using Gemini' },
-    ],
   }
 
   async init(): Promise<void> {
@@ -63,46 +56,51 @@ export class GeminiProvider implements ConversationProvider {
     for (let i = 0; i < maxAccounts; i++) {
       try {
         const profile = await fetchProfile(i)
-        if (!profile?.at) continue  // FIX: was 'break' — stopping loop prematurely
+        if (!profile?.at) continue
 
         const email = profile.email || ''
         if (seenEmails.has(email)) continue
         seenEmails.add(email)
 
-        const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve =>
+        const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve => {
           chrome.cookies.get({ url: 'https://gemini.google.com', name: 'SID' }, resolve)
-        )
+        })
         if (!cookie?.value) continue
 
-        const accountId = email || `${cookie.value}${i > 0 ? `_${i}` : ''}`
+        // Use email-based ID for stability and backward compatibility
+        const accountId = email ? email : `${cookie.value}${i > 0 ? `_${i}` : ''}`
 
+        const existing = await idb.accounts.get(accountId)
         const account: Account = {
           id: accountId,
           serviceId: SERVICE_ID,
           index: i,
-          token: profile.at,
           email,
           name: profile.name,
+          status: existing?.status ?? AccountStatus.Discovered,
+          lastVerified: Date.now(),
+          lastSync: existing?.lastSync ?? null,
         }
-
-        // FIX: Persist account to IndexedDB (matches gold standard)
         await idb.accounts.put(account)
+        await TokenVault.setToken(accountId, profile.at)
 
-        // FIX: Create org record if not exists (matches gold standard)
-        const existingOrg = await idb.orgs.get(accountId)
-        if (!existingOrg) {
-          await idb.orgs.put({
-            serviceId: SERVICE_ID,
-            accountId: account.id,
-            email: account.email,
-            name: account.name || account.email,
-            id: account.id,
-            status: 0, // OrgStatus.New
-          })
+        if (!existing) {
+          const existingOrg = await idb.orgs.get(accountId)
+          if (!existingOrg) {
+            await idb.orgs.put({
+              serviceId: SERVICE_ID,
+              accountId: account.id,
+              email: account.email,
+              name: account.name || account.email,
+              id: account.id,
+              status: OrgStatus.New,
+            })
+          }
         }
 
         found.push(account)
-      } catch {
+      } catch (detectErr: any) {
+        logWarn('gemini:index', `detectAccounts: skipping account | ${detectErr?.message || detectErr}`)
         continue
       }
     }
@@ -113,7 +111,7 @@ export class GeminiProvider implements ConversationProvider {
   async refreshAuth(account: Account): Promise<AuthProfile | null> {
     const profile = await fetchProfile(account.index)
     if (profile?.at) {
-      await idb.accounts.update(account.id, { token: profile.at })
+      await TokenVault.setToken(account.id, profile.at)
     }
     return profile
   }
@@ -169,7 +167,7 @@ export class GeminiProvider implements ConversationProvider {
   // ── Network / Auto-Sync ──
 
   async handleNetworkActivity(details: RequestDetails): Promise<SyncTrigger | null> {
-    return handleNetworkActivity(details)
+    return handleNetworkActivityFn(details)
   }
 
   async getChatUrl(conversation: Header): Promise<string> {
@@ -186,22 +184,18 @@ export class GeminiProvider implements ConversationProvider {
     try {
       const profile = await fetchProfile(account.index)
       return !!profile?.at
-    } catch {
+    } catch (pingErr: any) {
+      logWarn('gemini:index', `ping failed | account: ${account.id} | ${pingErr?.message || pingErr}`)
       return false
     }
   }
 
   hasCapability(type: string): boolean {
-    return this.config.capabilities.some(c => c.type === type)
+    return [
+      'conversation-list', 'message-fetch', 'search', 'create-conversation',
+      'edit-title', 'delete-conversation', 'summary', 'auto-sync',
+    ].includes(type)
   }
-
-  readonly supportedCapabilities: string[] = [
-    'conversation-list', 'message-fetch', 'search', 'create-conversation',
-    'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
-    'fetch-all-gems', 'fetch-summary', 'auto-sync', 'is-offline',
-    'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
-    'get-cached-accounts', 'ensure-authenticated',
-  ]
 }
 
 // ============================================================================
@@ -235,12 +229,14 @@ async function getChatUrlInternal(conversation: any): Promise<string> {
 }
 
 async function ensureToken(account: Account): Promise<{ token: string; index: number }> {
-  let { index, token } = account
+  let { index } = account
+  let token = await TokenVault.getToken(account.id)
+
   if (!token) {
     const profile = await fetchProfile(index)
     if (profile?.at) {
       token = profile.at
-      await idb.accounts.update(account.id, { token })
+      await TokenVault.setToken(account.id, token)
     } else {
       throw new Error('No auth token available')
     }
@@ -271,12 +267,13 @@ async function fetchHeadersInternal(
     throw new Error('Account not found')
   }
 
-  let { index, token } = account
+  let { index } = account
+  let token = await TokenVault.getToken(account.id)
   if (!token) {
     const profile = await fetchProfile(index)
     if (profile?.at) {
       token = profile.at
-      await idb.accounts.update(account.id, { token })
+      await TokenVault.setToken(account.id, token)
     } else {
       throw new Error('No auth token available')
     }
@@ -319,7 +316,8 @@ async function fetchHeadersInternal(
         } else if (Array.isArray(parsed)) {
           rawConversations = parsed
         }
-      } catch {
+      } catch (parseErr: any) {
+        logWarn('gemini:index', `fetchHeaders: failed to parse conversation list | ${parseErr?.message || parseErr}`)
         rawConversations = []
       }
     } else if (Array.isArray(result[2])) {
@@ -337,7 +335,8 @@ async function fetchHeadersInternal(
         } else {
           failedCount++
         }
-      } catch {
+      } catch (dataErr: any) {
+        logWarn('gemini:index', `fetchHeaders: dataToHeader failed | ${dataErr?.message || dataErr}`)
         failedCount++
       }
     }
@@ -368,7 +367,7 @@ async function fetchHeadersInternal(
         if (!refreshed?.at) {
           return { items: [], offset, total: offset, limit: fetchLimitCache || 100, missing: 0 }
         }
-        await idb.accounts.update(account.id, { token: refreshed.at })
+        await TokenVault.setToken(account.id, refreshed.at)
 
         const retryLimit = Math.min(Math.max(1, fetchLimitCache || 100), 100)
         const retryParams = [retryLimit, (!cursor || cursor === '' ? null : cursor)]
@@ -476,12 +475,13 @@ async function searchGeminiConversationsInternal(query: string, account: any): P
       throw new Error('Account not found')
     }
 
-    let { index, token } = accountRecord
+    let { index } = accountRecord
+    let token = await TokenVault.getToken(accountRecord.id)
     if (!token) {
       const refreshed = await fetchProfile(index)
       if (refreshed?.at) {
         token = refreshed.at
-        await idb.accounts.update(accountRecord.id, { token })
+        await TokenVault.setToken(accountRecord.id, token)
       } else {
         throw new Error('No auth token available')
       }
@@ -557,12 +557,12 @@ async function fetchSummaryInternal(
 
     const result = await createConversationInternal(orgId, prompt, signal)
 
-    // Delete the temporary conversation
+    // Delete the temporary conversation (best-effort cleanup)
     try {
       const { index, token } = await ensureToken(account)
       await batchexecute(index, token, 'GzXR5e', [`c_${result.id}`, 1], orgId)
-    } catch {
-      // Best-effort cleanup
+    } catch (cleanupErr: any) {
+      logWarn('gemini:index', `Cleanup: failed to delete temp conversation | ${result.id} | ${cleanupErr?.message || cleanupErr}`)
     }
 
     return result.response
@@ -571,6 +571,9 @@ async function fetchSummaryInternal(
   }
 }
 
+/** Maximum pages of Gem conversations to fetch. Set to override default (10). */
+export const gemPaginationConfig = { maxPages: 10 }
+
 export async function fetchAllGems(org: any): Promise<any[]> {
   try {
     const account = await idb.accounts.get(org.accountId || org.id)
@@ -578,12 +581,13 @@ export async function fetchAllGems(org: any): Promise<any[]> {
       throw new Error('Account not found')
     }
 
-    let { index, token } = account
+    let { index } = account
+    let token = await TokenVault.getToken(account.id)
     if (!token) {
       const profile = await fetchProfile(index)
       if (profile?.at) {
         token = profile.at
-        await idb.accounts.update(account.id, { token })
+        await TokenVault.setToken(account.id, token)
       } else {
         throw new Error('No auth token available')
       }
@@ -615,6 +619,7 @@ export async function fetchAllGems(org: any): Promise<any[]> {
     const allConversations: any[] = []
     let cursor: any = null
     let pageCount = 0
+    const maxPages = gemPaginationConfig.maxPages ?? 10
 
     do {
       const params = cursor ? [100, cursor, [0, null, 1]] : [100, null, [0, null, 1]]
@@ -633,7 +638,8 @@ export async function fetchAllGems(org: any): Promise<any[]> {
           } else if (Array.isArray(parsed)) {
             conversations = parsed
           }
-        } catch {
+        } catch (parseErr: any) {
+          logWarn('gemini:index', `searchGemini: failed to parse conversations | ${parseErr?.message || parseErr}`)
           conversations = []
         }
       } else if (Array.isArray(result[2])) {
@@ -651,17 +657,18 @@ export async function fetchAllGems(org: any): Promise<any[]> {
               allConversations.push({ ...baseConversation, ...header })
             }
           }
-        } catch {
+        } catch (entryErr: any) {
+          logWarn('gemini:index', `searchGemini: failed to process conversation entry | ${entryErr?.message || entryErr}`)
         }
       }
 
       cursor = result[1]
       pageCount++
-      if (pageCount >= 10) break
+      if (pageCount >= maxPages) break
     } while (cursor)
 
     return allConversations
-  } catch (error) {
+  } catch (error: any) {
     logError('gemini:fetchAllGems', `Failed | error: ${JSON.stringify(error?.message || error)}`)
     return []
   }
@@ -737,7 +744,7 @@ export async function syncMissingFromSearch(
     // Update org cached counts
     if (synced.length > 0) {
       try {
-        await idb.orgs.updateCounts(org.id)
+        await (idb.orgs as any).updateCounts(org.id)
         log('gemini:syncMissingFromSearch', `Updated cached counts for org: ${org.id}`)
       } catch (countError) {
         logError('gemini:syncMissingFromSearch', `Failed to update counts | error: ${JSON.stringify(countError)}`)

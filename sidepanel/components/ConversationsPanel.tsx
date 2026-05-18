@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { testCapability } from '@/lib/messaging'
+import { useAccount } from '@/contexts/AccountContext'
 import { useAppStore } from '@/stores/appStore'
 import { MessageSquare, ExternalLink, Search, RefreshCw, Loader2, Clock, Image } from 'lucide-react'
 import { MediaGallery } from './MediaGallery'
@@ -25,7 +26,8 @@ interface Header {
 }
 
 export function ConversationsPanel() {
-  const { activeAccountId, activeProvider } = useAppStore()
+  const { activeAccount } = useAccount()
+  const { activeProvider } = useAppStore()
   const [conversations, setConversations] = useState<Header[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -42,7 +44,7 @@ export function ConversationsPanel() {
   async function loadConversations() {
     setLoading(true)
     try {
-      const allConversations: Header[] = await testCapability('GET_ALL_HEADERS', { serviceId: activeProvider, accountId: activeAccountId || undefined })
+      const allConversations: Header[] = await testCapability('GET_ALL_HEADERS', { serviceId: activeProvider, accountId: activeAccount?.id || undefined })
       setConversations(Array.isArray(allConversations) ? allConversations : [])
     } catch (e) {
       console.error('Failed to load conversations:', e)
@@ -58,10 +60,10 @@ export function ConversationsPanel() {
     setMediaItems([])
     setShowMedia(false)
     try {
-      const result = await testCapability('TEST_FETCH_CONTENT', {
+      const result = await testCapability<any>('TEST_FETCH_CONTENT', {
         providerId: activeProvider,
         conversationId: conv.id,
-        accountId: activeAccountId || undefined,
+        accountId: activeAccount?.id || undefined,
       })
       setMessages(result?.messages || [])
 
@@ -78,7 +80,7 @@ export function ConversationsPanel() {
 
   async function openInGemini(conv: Header) {
     try {
-      const url = await testCapability('TEST_GET_CHAT_URL', {
+      const url = await testCapability<string>('TEST_GET_CHAT_URL', {
         providerId: activeProvider,
         conversationId: conv.id,
       })

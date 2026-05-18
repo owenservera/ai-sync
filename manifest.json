@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Conversation Archive",
-  "version": "0.0.4",
+  "version": "0.0.18",
   "description": "Download and sync your AI conversations to a local database",
   "permissions": [
     "storage",
@@ -12,6 +12,7 @@
   ],
   "host_permissions": [
     "https://gemini.google.com/*",
+    "https://accounts.google.com/*",
     "https://chatgpt.com/*",
     "https://claude.ai/*"
   ],

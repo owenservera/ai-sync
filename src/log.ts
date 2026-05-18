@@ -1,18 +1,30 @@
 const PREFIX = '[ConversationArchive]'
 
+// Debug mode — gates log/logInfo/logWarn.
+// Errors are always logged regardless.
+let debugMode = false
+
+export function setDebugMode(enabled: boolean): void {
+  debugMode = enabled
+}
+
 export function log(...args: any[]): void {
+  if (!debugMode) return
   console.log(PREFIX, ...args)
 }
 
 export function logInfo(...args: any[]): void {
+  if (!debugMode) return
   console.info(PREFIX, ...args)
 }
 
 export function logWarn(...args: any[]): void {
+  if (!debugMode) return
   console.warn(PREFIX, ...args)
 }
 
 export function logError(...args: any[]): void {
+  // Errors are always logged, regardless of debug mode
   console.error(PREFIX, ...args)
 }
 

@@ -1,6 +1,5 @@
 import {
   type ProviderConfig,
-  type ProviderCapability,
   type Account,
   type AuthProfile,
   type Header,

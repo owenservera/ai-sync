@@ -2,26 +2,6 @@
 // types.ts — Shared type definitions for all providers
 // ============================================================================
 
-// ---- Provider Capabilities ----
-
-export type ProviderCapabilityType =
-  | 'conversation-list'
-  | 'message-fetch'
-  | 'search'
-  | 'auto-sync'
-  | 'edit-title'
-  | 'delete-conversation'
-  | 'create-conversation'
-  | 'stream'
-  | 'summary'
-
-/** Describes what a provider can do */
-export interface ProviderCapability {
-  type: ProviderCapabilityType
-  label: string
-  description: string
-}
-
 // ---- Provider Configuration ----
 
 export interface ProviderConfig {
@@ -29,18 +9,30 @@ export interface ProviderConfig {
   name: string
   domain: string
   origins: string[]
-  capabilities: ProviderCapability[]
 }
 
 // ---- Data Types ----
+
+export enum AccountStatus {
+  /** Discovered via cookie scan but not yet verified with a network call */
+  Discovered = 'discovered',
+  /** Authenticated and actively syncing */
+  Active = 'active',
+  /** Authentication expired or user revoked access */
+  Expired = 'expired',
+  /** User manually disabled this account */
+  Disabled = 'disabled',
+}
 
 export interface Account {
   id: string
   serviceId: string
   index: number
-  token: string
   email: string
   name?: string
+  status: AccountStatus
+  lastVerified: number
+  lastSync: number | null
 }
 
 export interface Org {

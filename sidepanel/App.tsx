@@ -8,6 +8,7 @@ import { NetworkLogPanel } from '@/components/NetworkLogPanel'
 import { AccountsPanel } from '@/components/AccountsPanel'
 import { useAppStore } from '@/stores/appStore'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { AccountProvider } from '@/contexts/AccountContext'
 import { LayoutDashboard, MessageSquare, TestTube2, Settings, Network, Users, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -71,15 +72,17 @@ export default function App() {
           <span className="text-xs text-muted-foreground">v0.2.0</span>
         </header>
 
-        <div className="flex-1 overflow-auto">
-          {activeTab === 'overview' && <OverviewPanel />}
-          {activeTab === 'accounts' && <AccountsPanel />}
-          {activeTab === 'aichat' && <AIChatPanel />}
-          {activeTab === 'conversations' && <ConversationsPanel />}
-          {activeTab === 'capabilities' && <CapabilitiesPanel />}
-          {activeTab === 'network' && <NetworkLogPanel />}
-          {activeTab === 'settings' && <SettingsPanel />}
-        </div>
+        <AccountProvider>
+          <div className="flex-1 overflow-auto">
+            {activeTab === 'overview' && <OverviewPanel />}
+            {activeTab === 'accounts' && <AccountsPanel />}
+            {activeTab === 'aichat' && <AIChatPanel />}
+            {activeTab === 'conversations' && <ConversationsPanel />}
+            {activeTab === 'capabilities' && <CapabilitiesPanel />}
+            {activeTab === 'network' && <NetworkLogPanel />}
+            {activeTab === 'settings' && <SettingsPanel />}
+          </div>
+        </AccountProvider>
       </main>
     </div>
   )

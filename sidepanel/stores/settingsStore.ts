@@ -64,7 +64,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   loadSettings: async () => {
     try {
-      const settings = await testCapability('GET_SETTINGS')
+      const settings = await testCapability<Record<string, any>>('GET_SETTINGS')
       if (settings && typeof settings === 'object' && !('error' in settings)) {
         set({
           manualSync: settings['settings.general.manualSync'] ?? defaults.manualSync,
@@ -81,7 +81,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           isLoaded: true,
         })
       }
-    } catch {
+    } catch (loadErr: unknown) {
+      console.warn('[settingsStore] Failed to load settings', loadErr)
       set({ isLoaded: true })
     }
   },

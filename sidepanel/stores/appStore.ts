@@ -40,7 +40,6 @@ interface TestResult {
 interface AppState {
   activeTab: string
   activeProvider: string
-  activeAccountId: string
   providers: ProviderState[]
   conversations: Header[]
   selectedConversation: Conversation | null
@@ -51,7 +50,6 @@ interface AppState {
 
   setActiveTab: (tab: string) => void
   setActiveProvider: (id: string) => void
-  setActiveAccountId: (id: string) => void
   setProviders: (providers: ProviderState[]) => void
   setConversations: (conversations: Header[]) => void
   setSelectedConversation: (conv: Conversation | null) => void
@@ -64,7 +62,6 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   activeTab: 'overview',
   activeProvider: 'gemini',
-  activeAccountId: '',
   providers: [],
   conversations: [],
   selectedConversation: null,
@@ -75,7 +72,6 @@ export const useAppStore = create<AppState>((set) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setActiveProvider: (id) => set({ activeProvider: id }),
-  setActiveAccountId: (id) => set({ activeAccountId: id }),
   setProviders: (providers) => set({ providers }),
   setConversations: (conversations) => set({ conversations }),
   setSelectedConversation: (conv) => set({ selectedConversation: conv }),

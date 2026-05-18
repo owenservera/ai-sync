@@ -51,7 +51,7 @@ export function NetworkLogPanel() {
 
   async function loadLogs() {
     try {
-      const result = await testCapability('GET_NETWORK_LOGS')
+      const result = await testCapability<any>('GET_NETWORK_LOGS')
       if (result?.logs) setLogs(result.logs)
     } catch {
       // Keep mock logs if no real data

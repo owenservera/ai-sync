@@ -54,7 +54,8 @@ function copyStaticAssets(version) {
   const manifest = JSON.parse(readFileSync(join(__dirname, 'manifest.json'), 'utf-8'))
   manifest.background.service_worker = 'background/service_worker.js'
   manifest.side_panel.default_path = 'sidepanel/sidepanel.html'
-  manifest.action.default_popup = 'sidepanel/sidepanel.html'
+  // Side panel is opened via chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  // DO NOT add default_popup — it overrides the side panel behavior and renders as a tiny popup
   manifest.version = version
   writeFileSync(join(distDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 

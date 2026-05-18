@@ -194,7 +194,6 @@ export const ALL_CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
     messageType: 'GET_CACHED_ACCOUNTS',
     requiresAccount: false,
     params: [
-      { name: 'providerId', type: 'string', required: true, description: 'Provider ID' },
       { name: 'serviceId', type: 'string', required: false, description: 'Service ID override' },
     ],
     returnType: 'Account[]',
@@ -208,7 +207,6 @@ export const ALL_CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
     messageType: 'ENSURE_AUTHENTICATED',
     requiresAccount: false,
     params: [
-      { name: 'providerId', type: 'string', required: true, description: 'Provider ID' },
       { name: 'maxAccounts', type: 'number', required: false, description: 'Max accounts to detect (default: 10)' },
     ],
     returnType: 'Account[]',

@@ -2,10 +2,14 @@
 // All handler implementations — provider method calls, utility functions, bridge, meta.
 
 import { registry } from './registry'
+import { engine } from './engine'
 import { getProvider } from '../providers/provider-registry'
 import { idb } from '../idb'
 import { LiveStorage } from '../LiveStorage'
-import { syncManager } from '../sync-manager'
+import { syncOrchestrator } from '../sync/SyncOrchestrator'
+import { backgroundTabRegistry } from '../content/tab-registry'
+import { accountManager } from '../accounts/AccountManager'
+import { OrgStatus } from '../types'
 
 // ── Register all capability definitions FIRST (handlers depend on these) ──
 
@@ -283,12 +287,16 @@ registry.registerHandler('get-all-headers', async (ctx) => {
 
 registry.registerHandler('fetch-media-base64', async (ctx) => {
   const urls: string[] = ctx.params.urls as string[]
+  const MAX_MEDIA_SIZE = 20 * 1024 * 1024 // 20 MB — avoid OOM from large base64 conversions (M7)
   const results: Array<{ url: string; dataUrl?: string; error?: string; ext?: string }> = []
   for (const url of urls) {
     try {
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const arrayBuffer = await resp.arrayBuffer()
+      if (arrayBuffer.byteLength > MAX_MEDIA_SIZE) {
+        throw new Error(`Media too large: ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)}MB > 20MB`)
+      }
       const bytes = new Uint8Array(arrayBuffer)
       const binary = bytes.reduce((acc, b) => acc + String.fromCharCode(b), '')
       const base64 = btoa(binary)
@@ -310,7 +318,7 @@ registry.registerHandler('get-rate-limit-status', async () => {
 
 registry.registerHandler('get-cached-accounts', async (ctx) => {
   const serviceId = (ctx.params.serviceId as string) || ctx.providerId
-  const accounts = await idb.accounts.filter((a: any) => a.serviceId === serviceId).toArray()
+  const accounts = await accountManager.listAccounts(serviceId)
   const enriched = await Promise.all(accounts.map(async (acc: any) => ({
     ...acc,
     conversationCount: await idb.headers.filter((h: any) => h.accountId === acc.id).count(),
@@ -318,73 +326,12 @@ registry.registerHandler('get-cached-accounts', async (ctx) => {
   return enriched
 })
 
-// Shared utility: check if any cookie exists across domains
-async function checkAnyCookie(domains: string[], cookieNames: string[]): Promise<boolean> {
-  for (const domain of domains) {
-    for (const name of cookieNames) {
-      const cookie = await new Promise<chrome.cookies.Cookie | null>(resolve =>
-        chrome.cookies.get({ url: domain, name }, resolve)
-      )
-      if (cookie?.value) return true
-    }
-  }
-  return false
-}
-
-// Provider-specific auth cookie names (include Google multi-account variants)
-const PROVIDER_COOKIE_MAP: Record<string, string[]> = {
-  gemini: ['SID', '__Secure-1PSID', '__Secure-3PSID'],
-  openai: ['__Secure-next-auth.session-token', 'access_token'],
-  claude: ['sessionKey', 'anthropic-api-key'],
-}
-
 registry.registerHandler('ensure-authenticated', async (ctx) => {
-  const provider = getProvider(ctx.providerId)
-  if (!provider) throw new Error(`Provider not found: ${ctx.providerId}`)
-
-  // Step 1: Return cached accounts if available
-  const cached = await idb.accounts.filter((a: any) => a.serviceId === provider.id).toArray()
-  if (cached.length > 0) return cached
-
-  // Step 2: Gate on browser cookies before any network call (provider-aware)
-  const cookieDomains = provider.config.origins?.map(o => o.replace('/*', '')) ?? []
-  const cookieNames = PROVIDER_COOKIE_MAP[provider.id] || ['SID']
-  const hasCookie = await checkAnyCookie(cookieDomains, cookieNames)
-  if (!hasCookie) return []
-
-  // Step 3: Only now call provider.detectAccounts()
-  const accounts = await provider.detectAccounts()
-
-  // Step 4: Persist any new accounts and enrich with metadata
-  const enriched: any[] = []
-  for (const acc of accounts) {
-    await idb.accounts.put(acc)
-    const existingOrg = await idb.orgs.get(acc.id)
-    if (!existingOrg) {
-      await idb.orgs.put({
-        serviceId: acc.serviceId,
-        accountId: acc.id,
-        email: acc.email || '',
-        name: acc.name || acc.email || '',
-        id: acc.id,
-        status: 0, // OrgStatus.New
-      })
-    }
-    const conversationCount = await idb.headers.filter((h: any) => h.accountId === acc.id).count()
-    enriched.push({
-      ...acc,
-      conversationCount,
-      lastSync: null,
-    })
-  }
-
-  return enriched
+  // Use AccountManager for cache-first, cookie-gated resolution
+  return accountManager.detectAccounts(ctx.providerId)
 })
 
 registry.registerHandler('detect-accounts', async (ctx) => {
-  const provider = getProvider(ctx.providerId)
-  if (!provider) throw new Error(`Provider not found: ${ctx.providerId}`)
-
   try {
     // Use ensure-authenticated for cache-first, cookie-gated resolution
     const accounts = await Promise.race([
@@ -422,7 +369,7 @@ async function getProviderState(): Promise<any> {
   const providers = getAllProviders()
   const state: any[] = []
   for (const provider of providers) {
-    const accounts = await idb.accounts.filter((a: any) => a.serviceId === provider.id).toArray()
+    const accounts = await accountManager.listAccounts(provider.id)
     const connected = accounts.length > 0
     const conversationCount = connected
       ? await idb.headers.filter((h: any) => h.serviceId === provider.id).count()
@@ -449,13 +396,13 @@ registry.registerHandler('get-state', async () => {
 registry.registerHandler('sync-provider', async (ctx) => {
   const provider = getProvider(ctx.providerId)
   if (provider) {
-    // FIX: Use engine's cache-first account resolution instead of direct detectAccounts()
-    const accounts = await engine.execute({ providerId: ctx.providerId, capabilityId: 'ensure-authenticated' }) as any[]
+    // Use AccountManager's cache-first account resolution
+    const accounts = await accountManager.detectAccounts(ctx.providerId)
     const targetAccount = ctx.accountId
       ? accounts.find((a: any) => a.id === ctx.accountId)
       : accounts[0]
     if (targetAccount) {
-      syncManager.syncProvider(provider, targetAccount)
+      syncOrchestrator.syncProvider(provider, targetAccount)
     }
   }
   return { ok: true }
@@ -464,25 +411,26 @@ registry.registerHandler('sync-provider', async (ctx) => {
 registry.registerHandler('sync-conversation', async (ctx) => {
   const provider = getProvider(ctx.providerId)
   if (provider) {
-    // FIX: Use engine's cache-first account resolution instead of direct detectAccounts()
-    const accounts = await engine.execute({ providerId: ctx.providerId, capabilityId: 'ensure-authenticated' }) as any[]
+    // Use AccountManager's cache-first account resolution
+    const accounts = await accountManager.detectAccounts(ctx.providerId)
     const targetAccount = ctx.accountId
       ? accounts.find((a: any) => a.id === ctx.accountId)
       : accounts[0]
     if (targetAccount) {
-      syncManager.syncConversation(provider, targetAccount, ctx.params.conversationId as string)
+      syncOrchestrator.syncConversation(provider, targetAccount, ctx.params.conversationId as string)
     }
   }
   return { ok: true }
 })
 
 registry.registerHandler('set-active-account', async (ctx) => {
-  await LiveStorage.set('settings.accounts.activeId', (ctx.params.accountId as string) || '')
+  await accountManager.setActiveAccount(ctx.params.accountId as string)
   return { ok: true }
 })
 
 registry.registerHandler('get-active-account', async () => {
-  return LiveStorage.get({ 'settings.accounts.activeId': '' })
+  const account = await accountManager.getActiveAccount()
+  return account ? { id: account.id, email: account.email } : null
 })
 
 registry.registerHandler('get-settings', async () => {
@@ -509,9 +457,9 @@ registry.registerHandler('reset-rate-limit', async () => {
 })
 
 registry.registerHandler('chat-adjust-body', async (ctx) => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  await chrome.tabs.sendMessage(tabs[0].id!, {
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  await chrome.tabs.sendMessage(tab.tabId, {
     type: 'chat-adjust-body',
     isOpen: ctx.params.isOpen as boolean,
     isTransitioning: (ctx.params.isTransitioning as boolean) || false,
@@ -520,42 +468,42 @@ registry.registerHandler('chat-adjust-body', async (ctx) => {
 })
 
 registry.registerHandler('chat-handle-submission', async (ctx) => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  await chrome.tabs.sendMessage(tabs[0].id!, {
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  await chrome.tabs.sendMessage(tab.tabId, {
     type: 'chat-handle-submission',
     promptData: ctx.params.promptData as Record<string, unknown> | undefined,
   })
 })
 
 registry.registerHandler('chat-inject-continue-btn', async () => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  await chrome.tabs.sendMessage(tabs[0].id!, { type: 'chat-inject-continue-btn' })
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  await chrome.tabs.sendMessage(tab.tabId, { type: 'chat-inject-continue-btn' })
 })
 
 registry.registerHandler('chat-capture-network-id', async () => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  return chrome.tabs.sendMessage(tabs[0].id!, { type: 'chat-capture-network-id' })
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  return chrome.tabs.sendMessage(tab.tabId, { type: 'chat-capture-network-id' })
 })
 
 registry.registerHandler('chat-cleanup-prompts', async () => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  return chrome.tabs.sendMessage(tabs[0].id!, { type: 'chat-cleanup-prompts' })
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  return chrome.tabs.sendMessage(tab.tabId, { type: 'chat-cleanup-prompts' })
 })
 
 registry.registerHandler('chat-read-model', async () => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  return chrome.tabs.sendMessage(tabs[0].id!, { type: 'chat-read-model' })
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  return chrome.tabs.sendMessage(tab.tabId, { type: 'chat-read-model' })
 })
 
 registry.registerHandler('chat-set-app-width', async (ctx) => {
-  const tabs = await chrome.tabs.query({ url: 'https://gemini.google.com/*', active: true })
-  if (tabs.length === 0) throw new Error('No active Gemini tab found')
-  await chrome.tabs.sendMessage(tabs[0].id!, {
+  const tab = backgroundTabRegistry.getActiveTab('gemini')
+  if (!tab) throw new Error('No active Gemini tab found')
+  await chrome.tabs.sendMessage(tab.tabId, {
     type: 'chat-set-app-width',
     width: ctx.params.width as number,
     dragger: ctx.params.dragger as string | undefined,

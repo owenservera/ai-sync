@@ -106,7 +106,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   async loadConversation(conversationId: string, title?: string) {
     set({ isLoadingConversation: true, error: null })
     try {
-      const result = await testCapability('TEST_FETCH_CONTENT', {
+      const result = await testCapability<any>('TEST_FETCH_CONTENT', {
         providerId: 'gemini',
         conversationId,
       })
@@ -145,7 +145,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })
 
     try {
-      const result = await testCapability('TEST_CREATE_CONVERSATION', {
+      const result = await testCapability<any>('TEST_CREATE_CONVERSATION', {
         providerId,
         accountId,
         prompt: text.trim(),
@@ -172,7 +172,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           providerId,
           accountId,
         })
-      } catch {
+      } catch (syncErr: unknown) {
+        console.warn('[chatStore] sync-provider failed before loadConversations', syncErr)
       }
 
       await get().loadConversations()

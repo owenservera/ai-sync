@@ -8,6 +8,7 @@ import {
   type PaginatedResult,
   type SearchResult,
 } from '../../types'
+import { idb } from '../../idb'
 
 const SERVICE_ID = 'openai'
 const DOMAIN = 'chatgpt.com'
@@ -20,16 +21,14 @@ export class OpenAIProvider implements ConversationProvider {
     name: 'ChatGPT',
     domain: DOMAIN,
     origins: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
-    capabilities: [
-      { type: 'conversation-list', label: 'List Conversations', description: 'List all ChatGPT conversations' },
-      { type: 'message-fetch', label: 'Fetch Messages', description: 'Download full conversation history' },
-    ],
   }
 
   async init(): Promise<void> {}
   async destroy(): Promise<void> {}
 
-  async detectAccounts(): Promise<Account[]> { return [] }
+  async detectAccounts(): Promise<Account[]> {
+    return idb.accounts.filter((a: any) => a.serviceId === SERVICE_ID).toArray()
+  }
   async refreshAuth(_account: Account): Promise<AuthProfile | null> { return null }
   async isAuthenticated(_account: Account): Promise<boolean> { return false }
 
@@ -52,13 +51,6 @@ export class OpenAIProvider implements ConversationProvider {
   async ping(_account: Account): Promise<boolean> { return false }
 
   hasCapability(type: string): boolean {
-    return this.config.capabilities.some(c => c.type === type)
+    return ['conversation-list', 'message-fetch'].includes(type)
   }
-
-  readonly supportedCapabilities: string[] = [
-    'conversation-list', 'message-fetch', 'search', 'create-conversation',
-    'edit-title', 'delete-conversation', 'ping', 'get-chat-url',
-    'detect-accounts', 'refresh-auth', 'is-authenticated', 'reset-rate-limit',
-    'get-cached-accounts', 'ensure-authenticated',
-  ]
 }

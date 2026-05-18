@@ -63,9 +63,4 @@ export async function fetchServiceApi(
   }
 }
 
-export function makeSumarizationFunction(
-  _fetchSummary: (orgId: string, prompt: string, systemPrompt?: string, signal?: AbortSignal) => Promise<string>,
-): any {
-  // Simplified stub - matches original signature
-  return _fetchSummary
-}
+// makeSumarizationFunction removed - dead code
