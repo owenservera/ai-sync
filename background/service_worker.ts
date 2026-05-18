@@ -39,6 +39,12 @@ registerProvider(gemini)
 registerProvider(openai)
 registerProvider(claude)
 
+// ── Initialize account detection on SW startup ──
+
+accountManager.initializeAccounts().catch(err => {
+  logError('SW', 'Account initialization failed', err)
+})
+
 // ── Extension lifecycle ──
 
 chrome.runtime.onInstalled.addListener(async () => {
